@@ -5,6 +5,7 @@ import { languages } from '@codemirror/language-data'
 import { EditorView } from '@codemirror/view'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 import rehypeHighlight from 'rehype-highlight'
 import {
   FileText, FolderOpen, Save, SaveAll, FilePlus2,
@@ -200,7 +201,7 @@ export default function App() {
         {mode !== 'edit' && (
           <section className="pane preview-pane">
             <article className="markdown-body">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeHighlight]}>
                 {content}
               </ReactMarkdown>
             </article>
