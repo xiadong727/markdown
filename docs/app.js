@@ -5,11 +5,20 @@
   const els = {
     empty: $('empty'),
     content: $('content'),
+    editor: $('editor'),
     title: $('title'),
     toc: $('toc'),
     tocList: $('tocList'),
+    noteList: $('noteList'),
     scrim: $('scrim'),
     fileInput: $('fileInput'),
+    selPop: $('selPop'),
+    noteScrim: $('noteScrim'),
+    noteQuote: $('noteQuote'),
+    noteText: $('noteText'),
+    noteDelete: $('noteDelete'),
+    btnEdit: $('btnEdit'),
+    btnExport: $('btnExport'),
   }
 
   const STORE = {
@@ -17,9 +26,18 @@
     size: 'moji.size',
     doc: 'moji.lastDoc',
     name: 'moji.lastName',
+    notes: 'moji.notes.',
   }
 
-  // ---- 主题 ----
+  const state = {
+    md: '',
+    name: '',
+    editing: false,
+    notes: [],
+    pendingSel: null,
+    editingNoteId: null,
+  }
+
   function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t)
     document.querySelector('meta[name=theme-color]').setAttribute('content', t === 'dark' ? '#1c1d1a' : '#4a6b57')
@@ -27,7 +45,6 @@
   }
   applyTheme(localStorage.getItem(STORE.theme) || 'light')
 
-  // ---- 字号 ----
   const SIZES = [15, 17, 19, 21, 23]
   let sizeIdx = Math.max(0, SIZES.indexOf(parseInt(localStorage.getItem(STORE.size), 10)))
   if (sizeIdx < 0) sizeIdx = 1
@@ -37,7 +54,6 @@
   }
   applySize()
 
-  // ---- marked 配置 ----
   marked.setOptions({ gfm: true, breaks: false })
 
   function slugify(text, used) {
@@ -50,16 +66,25 @@
     return s
   }
 
-  function render(md, name) {
-    const dirty = marked.parse(md)
-    const clean = DOMPurify.sanitize(dirty, { ADD_ATTR: ['target', 'style', 'align'], ADD_TAGS: ['span', 'div'] })
+  function notesKey() { return STORE.notes + (state.name || '__untitled__') }
+  function loadNotes() {
+    try { state.notes = JSON.parse(localStorage.getItem(notesKey()) || '[]') }
+    catch { state.notes = [] }
+  }
+  function saveNotes() {
+    try { localStorage.setItem(notesKey(), JSON.stringify(state.notes)) }
+    catch { /* ignore */ }
+  }
+
+  function renderReader() {
+    const dirty = marked.parse(state.md)
+    const clean = DOMPurify.sanitize(dirty, { ADD_ATTR: ['target', 'style', 'align'], ADD_TAGS: ['span', 'div', 'mark'] })
     els.content.innerHTML = clean
 
     els.content.querySelectorAll('pre code').forEach((block) => {
-      try { hljs.highlightElement(block) } catch { /* 忽略高亮失败 */ }
+      try { hljs.highlightElement(block) } catch { /* ignore */ }
     })
 
-    // 为标题加 id 并构建目录
     const used = new Set()
     const toc = []
     els.content.querySelectorAll('h1, h2, h3').forEach((h) => {
@@ -69,18 +94,46 @@
     })
     buildToc(toc)
 
-    els.empty.hidden = true
-    els.content.hidden = false
-    if (name) {
-      els.title.textContent = name
-      document.title = name + ' · 墨记阅读'
-    }
-    window.scrollTo(0, 0)
+    applyHighlights()
+    buildNoteList()
+  }
 
-    try {
-      localStorage.setItem(STORE.doc, md)
-      if (name) localStorage.setItem(STORE.name, name)
-    } catch { /* 文档过大忽略 */ }
+  function applyHighlights() {
+    state.notes.forEach((n) => highlightText(n.quote, n.id, !!n.text))
+  }
+
+  function highlightText(quote, noteId, hasNote) {
+    if (!quote) return
+    const walker = document.createTreeWalker(els.content, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT
+        let p = node.parentNode
+        while (p && p !== els.content) {
+          if (p.nodeName === 'MARK' || p.nodeName === 'PRE' || p.nodeName === 'CODE') return NodeFilter.FILTER_REJECT
+          p = p.parentNode
+        }
+        return NodeFilter.FILTER_ACCEPT
+      },
+    })
+    let node
+    while ((node = walker.nextNode())) {
+      const idx = node.nodeValue.indexOf(quote)
+      if (idx === -1) continue
+      const range = document.createRange()
+      range.setStart(node, idx)
+      range.setEnd(node, idx + quote.length)
+      const mark = document.createElement('mark')
+      mark.className = 'note-mark' + (hasNote ? ' has-note' : '')
+      mark.dataset.noteId = noteId
+      try {
+        range.surroundContents(mark)
+        mark.addEventListener('click', (e) => {
+          e.stopPropagation()
+          openNoteSheet(noteId)
+        })
+      } catch { /* cross-node, skip */ }
+      return
+    }
   }
 
   function buildToc(toc) {
@@ -104,18 +157,186 @@
     })
   }
 
+  function buildNoteList() {
+    if (!state.notes.length) {
+      els.noteList.innerHTML = '<div class="toc-empty">暂无批注，选中文字即可添加</div>'
+      return
+    }
+    els.noteList.innerHTML = ''
+    state.notes.forEach((n) => {
+      const a = document.createElement('a')
+      a.className = 'note-list-item'
+      a.href = 'javascript:void 0'
+      a.innerHTML = '<span class="nq"></span><span class="nt"></span>'
+      a.querySelector('.nq').textContent = '「' + n.quote + '」'
+      a.querySelector('.nt').textContent = n.text || '（仅高亮）'
+      a.addEventListener('click', (e) => {
+        e.preventDefault()
+        closeToc()
+        const mark = els.content.querySelector('mark[data-note-id="' + n.id + '"]')
+        if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        openNoteSheet(n.id)
+      })
+      els.noteList.appendChild(a)
+    })
+  }
+
   function openToc() { els.toc.classList.add('show'); els.scrim.classList.add('show') }
   function closeToc() { els.toc.classList.remove('show'); els.scrim.classList.remove('show') }
+
+  function loadDoc(md, name) {
+    state.md = md
+    state.name = name || ''
+    state.editing = false
+    loadNotes()
+
+    els.empty.hidden = true
+    els.content.hidden = false
+    els.editor.hidden = true
+    els.btnExport.hidden = false
+    els.btnEdit.textContent = '✏️'
+
+    if (state.name) {
+      els.title.textContent = state.name
+      document.title = state.name + ' · 墨记阅读'
+    }
+    renderReader()
+    window.scrollTo(0, 0)
+    persistDoc()
+  }
+
+  function persistDoc() {
+    try {
+      localStorage.setItem(STORE.doc, state.md)
+      if (state.name) localStorage.setItem(STORE.name, state.name)
+    } catch { /* too large */ }
+  }
+
+  function setEditing(on) {
+    state.editing = on
+    if (on) {
+      els.editor.value = state.md
+      els.editor.hidden = false
+      els.content.hidden = true
+      els.btnEdit.textContent = '✓'
+      hideSelPop()
+      setTimeout(() => els.editor.focus(), 0)
+    } else {
+      state.md = els.editor.value
+      els.editor.hidden = true
+      els.content.hidden = false
+      els.btnEdit.textContent = '✏️'
+      renderReader()
+      persistDoc()
+    }
+  }
+
+  function onSelection() {
+    if (state.editing) return
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed) { hideSelPop(); return }
+    const text = sel.toString().trim()
+    if (!text || text.length > 200) { hideSelPop(); return }
+    const anchor = sel.anchorNode
+    if (!anchor || !els.content.contains(anchor.nodeType === 1 ? anchor : anchor.parentNode)) { hideSelPop(); return }
+
+    state.pendingSel = { quote: text }
+    const rect = sel.getRangeAt(0).getBoundingClientRect()
+    els.selPop.hidden = false
+    const x = rect.left + rect.width / 2 + window.scrollX
+    const y = rect.top + window.scrollY - 8
+    els.selPop.style.left = x + 'px'
+    els.selPop.style.top = y + 'px'
+  }
+  function hideSelPop() { els.selPop.hidden = true }
+
+  function addNote(quote, text) {
+    const id = 'n' + Date.now() + Math.random().toString(36).slice(2, 6)
+    state.notes.push({ id, quote, text: text || '' })
+    saveNotes()
+    renderReader()
+  }
+
+  function openNoteSheet(noteId) {
+    const n = state.notes.find((x) => x.id === noteId)
+    if (!n) return
+    state.editingNoteId = noteId
+    els.noteQuote.textContent = '「' + n.quote + '」'
+    els.noteText.value = n.text || ''
+    els.noteDelete.hidden = false
+    els.noteScrim.hidden = false
+    setTimeout(() => els.noteText.focus(), 0)
+  }
+  function openNewNoteSheet(quote) {
+    state.editingNoteId = null
+    state.pendingSel = { quote }
+    els.noteQuote.textContent = '「' + quote + '」'
+    els.noteText.value = ''
+    els.noteDelete.hidden = true
+    els.noteScrim.hidden = false
+    setTimeout(() => els.noteText.focus(), 0)
+  }
+  function closeNoteSheet() {
+    els.noteScrim.hidden = true
+    state.editingNoteId = null
+  }
+  function saveNoteSheet() {
+    const text = els.noteText.value.trim()
+    if (state.editingNoteId) {
+      const n = state.notes.find((x) => x.id === state.editingNoteId)
+      if (n) { n.text = text; saveNotes(); renderReader() }
+    } else if (state.pendingSel) {
+      addNote(state.pendingSel.quote, text)
+      state.pendingSel = null
+    }
+    closeNoteSheet()
+  }
+  function deleteNote() {
+    if (!state.editingNoteId) return
+    state.notes = state.notes.filter((x) => x.id !== state.editingNoteId)
+    saveNotes()
+    renderReader()
+    closeNoteSheet()
+  }
+
+  function buildExport() {
+    let out = state.editing ? els.editor.value : state.md
+    const withNotes = state.notes.filter((n) => n.text)
+    if (!withNotes.length) return out
+    out = out.replace(/\s*$/, '') + '\n\n---\n\n## 批注\n\n'
+    withNotes.forEach((n, i) => {
+      out += (i + 1) + '. 「' + n.quote + '」\n   > ' + n.text.replace(/\n/g, '\n   > ') + '\n\n'
+    })
+    return out.replace(/\s*$/, '') + '\n'
+  }
+
+  function download(filename, text) {
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  function exportDoc() {
+    if (state.editing) { state.md = els.editor.value }
+    const base = (state.name || 'document').replace(/\.(md|markdown|mdown|mkd|txt)$/i, '')
+    download(base + '.md', buildExport())
+    showToast('已导出（含批注）到下载')
+  }
 
   function readFile(file) {
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => render(String(reader.result), file.name)
+    reader.onload = () => loadDoc(String(reader.result), file.name)
     reader.onerror = () => alert('读取文件失败')
     reader.readAsText(file, 'utf-8')
   }
 
-  // ---- 事件 ----
   $('btnTheme').addEventListener('click', () => {
     const cur = document.documentElement.getAttribute('data-theme')
     applyTheme(cur === 'dark' ? 'light' : 'dark')
@@ -127,12 +348,42 @@
   $('btnToc').addEventListener('click', openToc)
   els.scrim.addEventListener('click', closeToc)
 
+  els.btnEdit.addEventListener('click', () => {
+    if (els.empty.hidden === false) { loadDoc('', '未命名.md'); setEditing(true); return }
+    setEditing(!state.editing)
+  })
+  els.btnExport.addEventListener('click', exportDoc)
+
   const pick = () => els.fileInput.click()
   $('btnOpen').addEventListener('click', pick)
   $('btnOpenBig').addEventListener('click', pick)
+  $('btnNewBig').addEventListener('click', () => { loadDoc('# 新文档\n\n', '未命名.md'); setEditing(true) })
   els.fileInput.addEventListener('change', (e) => readFile(e.target.files[0]))
 
-  // 拖拽
+  document.addEventListener('selectionchange', onSelection)
+  document.addEventListener('scroll', hideSelPop, { passive: true })
+  els.content.addEventListener('click', (e) => {
+    if (!e.target.closest('mark.note-mark')) hideSelPop()
+  })
+
+  $('selHighlight').addEventListener('click', (e) => {
+    e.preventDefault()
+    if (state.pendingSel) addNote(state.pendingSel.quote, '')
+    window.getSelection().removeAllRanges()
+    hideSelPop()
+  })
+  $('selNote').addEventListener('click', (e) => {
+    e.preventDefault()
+    if (state.pendingSel) openNewNoteSheet(state.pendingSel.quote)
+    window.getSelection().removeAllRanges()
+    hideSelPop()
+  })
+
+  els.noteDelete.addEventListener('click', deleteNote)
+  $('noteCancel').addEventListener('click', closeNoteSheet)
+  $('noteSave').addEventListener('click', saveNoteSheet)
+  els.noteScrim.addEventListener('click', (e) => { if (e.target === els.noteScrim) closeNoteSheet() })
+
   ;['dragover', 'drop'].forEach((ev) => {
     document.addEventListener(ev, (e) => { e.preventDefault() })
   })
@@ -141,11 +392,9 @@
     if (f) readFile(f)
   })
 
-  // ---- 启动：恢复上次文档 ----
   const last = localStorage.getItem(STORE.doc)
-  if (last) render(last, localStorage.getItem(STORE.name) || '')
+  if (last) loadDoc(last, localStorage.getItem(STORE.name) || '')
 
-  // ---- 注册 Service Worker（离线缓存）----
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').then((reg) => {
@@ -158,14 +407,14 @@
             }
           })
         })
-      }).catch(() => { /* 注册失败不影响使用 */ })
+      }).catch(() => { /* ignore */ })
     })
   }
 
   function showToast(msg) {
     const t = document.createElement('div')
     t.textContent = msg
-    t.style.cssText = 'position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.2);'
+    t.style.cssText = 'position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;z-index:70;box-shadow:0 4px 16px rgba(0,0,0,.2);'
     document.body.appendChild(t)
     setTimeout(() => t.remove(), 3000)
   }

@@ -226,12 +226,126 @@
   .md li { margin: .3em 0; }
   .md input[type=checkbox] { margin-right: 6px; }
   .md .hljs { background: transparent; padding: 0; }
+
+  /* ---- 编辑器 ---- */
+  .editor {
+    display: block;
+    width: 100%;
+    border: none;
+    outline: none;
+    resize: none;
+    background: var(--panel);
+    color: var(--ink);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 18px 16px calc(40px + env(safe-area-inset-bottom));
+    position: fixed;
+    top: calc(52px + env(safe-area-inset-top));
+    left: 0; right: 0; bottom: 0;
+    -webkit-text-size-adjust: 100%;
+  }
+  .open-btn.ghost {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+
+  /* ---- 高亮标记 ---- */
+  .md mark.note-mark {
+    background: #ffe9a8;
+    border-radius: 3px;
+    padding: 0 1px;
+    cursor: pointer;
+  }
+  html[data-theme="dark"] .md mark.note-mark { background: #6b5a1f; color: #f4efdd; }
+  .md mark.note-mark.has-note { border-bottom: 2px solid var(--accent); }
+
+  /* ---- 选中弹出工具条 ---- */
+  .sel-pop {
+    position: absolute;
+    z-index: 40;
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    background: #222;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.3);
+    transform: translate(-50%, -100%);
+  }
+  .sel-pop button {
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .sel-pop button:active { background: #444; }
+
+  /* ---- 批注编辑弹层 ---- */
+  .note-scrim {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 60;
+    display: flex;
+    align-items: flex-end;
+  }
+  .note-sheet {
+    width: 100%;
+    background: var(--panel);
+    border-radius: 18px 18px 0 0;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 20px rgba(0,0,0,.2);
+  }
+  .note-quote {
+    font-size: 13px;
+    color: var(--muted);
+    border-left: 3px solid var(--accent);
+    background: var(--quote-bg);
+    padding: 8px 12px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 12px;
+    max-height: 90px;
+    overflow-y: auto;
+  }
+  #noteText {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 15px;
+    padding: 10px 12px;
+    resize: vertical;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+  .note-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .np-btn {
+    border: none;
+    border-radius: 999px;
+    padding: 9px 18px;
+    font-size: 14px;
+    cursor: pointer;
+    background: var(--border);
+    color: var(--ink);
+  }
+  .np-btn.primary { background: var(--accent); color: #fff; }
+  .np-btn.danger { background: transparent; color: #c0392b; }
+
+  .note-list-item { display: block; padding: 10px 18px; border-left: 3px solid var(--accent); }
+  .note-list-item .nq { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+  .note-list-item .nt { font-size: 14px; color: var(--ink); }
 </style>
 </head>
 <body>
   <div class="topbar">
     <button class="icon-btn" id="btnToc" title="目录" aria-label="目录">☰</button>
     <span class="brand" id="title">墨记阅读</span>
+    <button class="icon-btn" id="btnEdit" title="编辑" aria-label="编辑">✏️</button>
+    <button class="icon-btn" id="btnExport" title="导出" aria-label="导出" hidden>⤓</button>
     <button class="icon-btn" id="btnSize" title="字号" aria-label="字号">A</button>
     <button class="icon-btn" id="btnTheme" title="深色" aria-label="深色">◐</button>
     <button class="icon-btn" id="btnOpen" title="打开" aria-label="打开文件">📂</button>
@@ -241,18 +355,43 @@
     <div class="empty" id="empty">
       <div class="logo">墨</div>
       <h1>墨记阅读</h1>
-      <p>手机上的本地 Markdown 阅读器<br/>支持 GFM 表格、任务列表、代码高亮、内嵌 HTML</p>
+      <p>手机上的本地 Markdown 阅读 / 编辑器<br/>支持 GFM、代码高亮、内嵌 HTML、批注</p>
       <button class="open-btn" id="btnOpenBig">打开 Markdown 文件</button>
+      <button class="open-btn ghost" id="btnNewBig">新建空白文档</button>
       <p class="hint">也可把 .md 文件拖到此页面 · 可「添加到主屏幕」离线使用</p>
     </div>
     <article class="md" id="content" hidden></article>
   </main>
 
+  <textarea id="editor" class="editor" hidden spellcheck="false" placeholder="在此编辑 Markdown…"></textarea>
+
   <div class="scrim" id="scrim"></div>
   <aside class="toc" id="toc">
     <div class="toc-head">目录</div>
     <nav class="toc-list" id="tocList"></nav>
+    <div class="toc-head" style="border-top:1px solid var(--border)">批注</div>
+    <nav class="toc-list" id="noteList"></nav>
   </aside>
+
+  <!-- 选中文字弹出的批注工具条 -->
+  <div class="sel-pop" id="selPop" hidden>
+    <button id="selHighlight">高亮</button>
+    <button id="selNote">批注</button>
+  </div>
+
+  <!-- 批注编辑弹层 -->
+  <div class="note-scrim" id="noteScrim" hidden>
+    <div class="note-sheet">
+      <div class="note-quote" id="noteQuote"></div>
+      <textarea id="noteText" placeholder="写下你的批注…" rows="4"></textarea>
+      <div class="note-actions">
+        <button class="np-btn danger" id="noteDelete" hidden>删除</button>
+        <span style="flex:1"></span>
+        <button class="np-btn" id="noteCancel">取消</button>
+        <button class="np-btn primary" id="noteSave">保存</button>
+      </div>
+    </div>
+  </div>
 
   <input type="file" id="fileInput" accept=".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain" />
 
