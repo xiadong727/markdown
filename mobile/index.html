@@ -261,28 +261,41 @@
   html[data-theme="dark"] .md mark.note-mark { background: #6b5a1f; color: #f4efdd; }
   .md mark.note-mark.has-note { border-bottom: 2px solid var(--accent); }
 
-  /* ---- 选中弹出工具条 ---- */
+  /* ---- 选中后底部操作条（固定底部，避开系统选中菜单）---- */
   .sel-pop {
-    position: absolute;
-    z-index: 40;
+    position: fixed;
+    left: 50%;
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(16px);
+    z-index: 55;
     display: flex;
-    gap: 2px;
-    padding: 4px;
-    background: #222;
-    border-radius: 10px;
-    box-shadow: 0 4px 14px rgba(0,0,0,.3);
-    transform: translate(-50%, -100%);
+    gap: 6px;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.28);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .sel-pop:not([hidden]) {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
   }
   .sel-pop button {
     border: none;
-    background: transparent;
+    background: var(--accent);
     color: #fff;
-    font-size: 14px;
-    padding: 6px 12px;
-    border-radius: 7px;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 10px 22px;
+    border-radius: 999px;
     cursor: pointer;
   }
-  .sel-pop button:active { background: #444; }
+  .sel-pop button.ghost { background: var(--border); color: var(--ink); }
+  .sel-pop button:active { opacity: .82; }
 
   /* ---- 批注编辑弹层 ---- */
   .note-scrim {
@@ -373,9 +386,9 @@
     <nav class="toc-list" id="noteList"></nav>
   </aside>
 
-  <!-- 选中文字弹出的批注工具条 -->
+  <!-- 选中文字后底部弹出的批注工具条 -->
   <div class="sel-pop" id="selPop" hidden>
-    <button id="selHighlight">高亮</button>
+    <button id="selHighlight" class="ghost">高亮</button>
     <button id="selNote">批注</button>
   </div>
 

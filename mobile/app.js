@@ -241,12 +241,7 @@
     if (!anchor || !els.content.contains(anchor.nodeType === 1 ? anchor : anchor.parentNode)) { hideSelPop(); return }
 
     state.pendingSel = { quote: text }
-    const rect = sel.getRangeAt(0).getBoundingClientRect()
     els.selPop.hidden = false
-    const x = rect.left + rect.width / 2 + window.scrollX
-    const y = rect.top + window.scrollY - 8
-    els.selPop.style.left = x + 'px'
-    els.selPop.style.top = y + 'px'
   }
   function hideSelPop() { els.selPop.hidden = true }
 
@@ -361,9 +356,14 @@
   els.fileInput.addEventListener('change', (e) => readFile(e.target.files[0]))
 
   document.addEventListener('selectionchange', onSelection)
-  document.addEventListener('scroll', hideSelPop, { passive: true })
   els.content.addEventListener('click', (e) => {
     if (!e.target.closest('mark.note-mark')) hideSelPop()
+  })
+
+  // 阻止按下操作条按钮时抢走选区（否则选区塌陷会先关掉工具条）
+  ;['selHighlight', 'selNote'].forEach((id) => {
+    $(id).addEventListener('mousedown', (e) => e.preventDefault())
+    $(id).addEventListener('touchstart', (e) => e.preventDefault(), { passive: false })
   })
 
   $('selHighlight').addEventListener('click', (e) => {
