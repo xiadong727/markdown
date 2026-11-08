@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
+<meta name="theme-color" content="#4a6b57" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="description" content="墨记阅读 · 手机上的本地 Markdown 阅读器" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="favicon.png" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="stylesheet" href="lib/hljs-github.css" />
+<title>墨记阅读</title>
+<style>
+  :root {
+    --bg: #f4f5f1;
+    --panel: #ffffff;
+    --ink: #2b2b28;
+    --muted: #8a8a82;
+    --accent: #4a6b57;
+    --border: #e3e3dc;
+    --code-bg: #f0f1ec;
+    --quote-bg: #f7f8f4;
+  }
+  html[data-theme="dark"] {
+    --bg: #1c1d1a;
+    --panel: #24251f;
+    --ink: #e6e6df;
+    --muted: #9a9a90;
+    --accent: #8fb79c;
+    --border: #35362f;
+    --code-bg: #2c2d26;
+    --quote-bg: #2a2b24;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans", "Noto Sans CJK SC", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: var(--reader-size, 17px);
+    line-height: 1.75;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+  }
+
+  /* ---- 顶栏 ---- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: calc(52px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 12px 0;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ink);
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .icon-btn:active { background: var(--border); }
+
+  /* ---- 内容 ---- */
+  .reader {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 20px 18px calc(40px + env(safe-area-inset-bottom));
+  }
+
+  /* 空状态 */
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 68vh;
+    color: var(--muted);
+    gap: 18px;
+    padding: 0 24px;
+  }
+  .empty .logo {
+    width: 76px; height: 76px;
+    border-radius: 20px;
+    background: var(--accent);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 38px; font-weight: 700;
+  }
+  .empty h1 { margin: 0; font-size: 20px; color: var(--ink); }
+  .empty p { margin: 0; font-size: 14px; line-height: 1.6; }
+  .open-btn {
+    margin-top: 8px;
+    padding: 12px 26px;
+    border: none;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .open-btn:active { opacity: .85; }
+  .hint { font-size: 12px; }
+
+  /* ---- 抽屉目录 ---- */
+  .scrim {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.4);
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s;
+    z-index: 30;
+  }
+  .scrim.show { opacity: 1; pointer-events: auto; }
+  .toc {
+    position: fixed;
+    top: 0; bottom: 0; left: 0;
+    width: min(78vw, 320px);
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    transform: translateX(-100%);
+    transition: transform .22s ease;
+    z-index: 31;
+    display: flex;
+    flex-direction: column;
+    padding-top: env(safe-area-inset-top);
+  }
+  .toc.show { transform: translateX(0); }
+  .toc-head {
+    padding: 16px 18px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .toc-list { overflow-y: auto; padding: 8px 0 24px; }
+  .toc-list a {
+    display: block;
+    padding: 9px 18px;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 14px;
+    line-height: 1.4;
+    border-left: 3px solid transparent;
+  }
+  .toc-list a:active { background: var(--quote-bg); }
+  .toc-list a.lv2 { padding-left: 30px; font-size: 13px; }
+  .toc-list a.lv3 { padding-left: 44px; font-size: 13px; color: var(--muted); }
+  .toc-empty { padding: 18px; color: var(--muted); font-size: 13px; }
+
+  input[type=file] { display: none; }
+
+  /* ---- Markdown 排版 ---- */
+  .md { word-wrap: break-word; }
+  .md > *:first-child { margin-top: 0; }
+  .md h1, .md h2, .md h3, .md h4 { line-height: 1.35; margin: 1.4em 0 .6em; font-weight: 700; }
+  .md h1 { font-size: 1.6em; border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+  .md h2 { font-size: 1.35em; border-bottom: 1px solid var(--border); padding-bottom: .25em; }
+  .md h3 { font-size: 1.15em; }
+  .md h4 { font-size: 1.02em; }
+  .md p { margin: .8em 0; }
+  .md a { color: var(--accent); word-break: break-all; }
+  .md img { max-width: 100%; height: auto; border-radius: 8px; }
+  .md blockquote {
+    margin: 1em 0;
+    padding: 2px 14px;
+    color: var(--muted);
+    border-left: 3px solid var(--accent);
+    background: var(--quote-bg);
+    border-radius: 0 8px 8px 0;
+  }
+  .md code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .88em;
+    background: var(--code-bg);
+    padding: .15em .4em;
+    border-radius: 5px;
+  }
+  .md pre {
+    background: var(--quote-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .md pre code { background: transparent; padding: 0; font-size: .82em; line-height: 1.6; }
+  .md table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: .92em;
+  }
+  .md th, .md td { border: 1px solid var(--border); padding: 7px 12px; }
+  .md th { background: var(--code-bg); }
+  .md hr { border: none; border-top: 1px solid var(--border); margin: 1.8em 0; }
+  .md ul, .md ol { padding-left: 1.4em; }
+  .md li { margin: .3em 0; }
+  .md input[type=checkbox] { margin-right: 6px; }
+  .md .hljs { background: transparent; padding: 0; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <button class="icon-btn" id="btnToc" title="目录" aria-label="目录">☰</button>
+    <span class="brand" id="title">墨记阅读</span>
+    <button class="icon-btn" id="btnSize" title="字号" aria-label="字号">A</button>
+    <button class="icon-btn" id="btnTheme" title="深色" aria-label="深色">◐</button>
+    <button class="icon-btn" id="btnOpen" title="打开" aria-label="打开文件">📂</button>
+  </div>
+
+  <main class="reader" id="reader">
+    <div class="empty" id="empty">
+      <div class="logo">墨</div>
+      <h1>墨记阅读</h1>
+      <p>手机上的本地 Markdown 阅读器<br/>支持 GFM 表格、任务列表、代码高亮、内嵌 HTML</p>
+      <button class="open-btn" id="btnOpenBig">打开 Markdown 文件</button>
+      <p class="hint">也可把 .md 文件拖到此页面 · 可「添加到主屏幕」离线使用</p>
+    </div>
+    <article class="md" id="content" hidden></article>
+  </main>
+
+  <div class="scrim" id="scrim"></div>
+  <aside class="toc" id="toc">
+    <div class="toc-head">目录</div>
+    <nav class="toc-list" id="tocList"></nav>
+  </aside>
+
+  <input type="file" id="fileInput" accept=".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain" />
+
+  <script src="lib/marked.min.js"></script>
+  <script src="lib/highlight.min.js"></script>
+  <script src="lib/purify.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
