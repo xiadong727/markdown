@@ -144,4 +144,29 @@
   // ---- 启动：恢复上次文档 ----
   const last = localStorage.getItem(STORE.doc)
   if (last) render(last, localStorage.getItem(STORE.name) || '')
+
+  // ---- 注册 Service Worker（离线缓存）----
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').then((reg) => {
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing
+          if (!sw) return
+          sw.addEventListener('statechange', () => {
+            if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+              showToast('已更新到新版本，下次打开生效')
+            }
+          })
+        })
+      }).catch(() => { /* 注册失败不影响使用 */ })
+    })
+  }
+
+  function showToast(msg) {
+    const t = document.createElement('div')
+    t.textContent = msg
+    t.style.cssText = 'position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.2);'
+    document.body.appendChild(t)
+    setTimeout(() => t.remove(), 3000)
+  }
 })()
