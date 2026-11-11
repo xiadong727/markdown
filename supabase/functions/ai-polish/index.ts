@@ -56,7 +56,6 @@ Deno.serve(async (req) => {
           { role: 'system', content: sys },
           { role: 'user', content: user },
         ],
-        temperature: 0.6,
         stream: false,
       }),
     })
