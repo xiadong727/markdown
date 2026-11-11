@@ -58,6 +58,15 @@
     return data
   }
 
+  // 标记"最近打开"：仅更新 updated_at，不产生版本快照
+  async function touchDoc(id) {
+    try {
+      await sb.from('docs')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', id).eq('space_key', getSpace())
+    } catch (e) { /* ignore */ }
+  }
+
   // 新建文档，返回其记录
   async function createDoc(name, content, notes) {
     const { data, error } = await sb
@@ -162,6 +171,7 @@
     getAI, setAI, hasAI,
     ready,
     listDocs, getDoc, createDoc, saveDoc, deleteDoc,
+    touchDoc,
     listVersions,
     subscribe, unsubscribe,
     polish,

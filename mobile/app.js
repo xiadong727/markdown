@@ -36,6 +36,10 @@
     polishOut: $('polishOut'),
     polishRetry: $('polishRetry'),
     polishApply: $('polishApply'),
+    recentHead: $('recentHead'),
+    recentList: $('recentList'),
+    emptyRecent: $('emptyRecent'),
+    emptyRecentList: $('emptyRecentList'),
   }
 
   const STORE = {
@@ -253,6 +257,7 @@
       }
       persistDoc()
       showToast('已保存到云 ✓')
+      refreshRecent()
     } catch (e) {
       showToast('保存失败：' + (e.message || e))
     }
@@ -308,6 +313,8 @@
       state.notes = Array.isArray(d.notes) ? d.notes : []
       saveNotes2(id, state.notes)
       loadDoc(d.content || '', d.name || '未命名.md', d.id)
+      MojiCloud.touchDoc(id)   // 标记最近打开
+      refreshRecent()
     } catch (e) { showToast('打开失败：' + (e.message || e)) }
   }
 
@@ -320,6 +327,69 @@
   }
   function saveNotes2(id, notes) {
     try { localStorage.setItem(STORE.notes + (id || ''), JSON.stringify(notes)) } catch { /* ignore */ }
+  }
+
+  // ===== 最近打开 =====
+  const RECENT_KEY = 'moji.recent'
+  function cacheRecent(docs) {
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(docs.slice(0, 8))) } catch { /* ignore */ }
+  }
+  function readRecentCache() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]') } catch { return [] }
+  }
+
+  async function refreshRecent() {
+    // 先用本地缓存即时渲染（离线也能显示）
+    renderRecent(readRecentCache())
+    if (!cloudOn() || !MojiCloud.hasSpace()) { renderRecent([]); return }
+    try {
+      const docs = await MojiCloud.listDocs()
+      const top = docs.slice(0, 8)
+      cacheRecent(top)
+      renderRecent(top)
+    } catch (e) { /* 网络失败保留缓存 */ }
+  }
+
+  function renderRecent(docs) {
+    const has = docs && docs.length
+    // 抽屉顶部
+    els.recentHead.hidden = !has
+    els.recentList.hidden = !has
+    els.recentList.innerHTML = ''
+    // 空状态页
+    els.emptyRecent.hidden = !has
+    els.emptyRecentList.innerHTML = ''
+    if (!has) return
+
+    docs.forEach((d) => {
+      // 抽屉项
+      const a = document.createElement('a')
+      a.href = 'javascript:void 0'
+      a.className = 'recent-row'
+      a.innerHTML = '<span class="rr-name"></span><span class="rr-time"></span>'
+      a.querySelector('.rr-name').textContent = d.name || '未命名.md'
+      a.querySelector('.rr-time').textContent = shortTime(d.updated_at)
+      a.addEventListener('click', (e) => { e.preventDefault(); closeToc(); openCloudDoc(d.id) })
+      els.recentList.appendChild(a)
+      // 空状态卡片
+      const item = document.createElement('div')
+      item.className = 'recent-item'
+      item.innerHTML = '<span class="ri-name"></span><span class="ri-time"></span>'
+      item.querySelector('.ri-name').textContent = d.name || '未命名.md'
+      item.querySelector('.ri-time').textContent = shortTime(d.updated_at)
+      item.addEventListener('click', () => openCloudDoc(d.id))
+      els.emptyRecentList.appendChild(item)
+    })
+  }
+
+  function shortTime(iso) {
+    try {
+      const d = new Date(iso), now = new Date()
+      const p = (n) => String(n).padStart(2, '0')
+      const sameDay = d.toDateString() === now.toDateString()
+      if (sameDay) return p(d.getHours()) + ':' + p(d.getMinutes())
+      return (d.getMonth() + 1) + '月' + d.getDate() + '日'
+    } catch { return '' }
   }
 
   // ===== 历史版本 =====
@@ -410,6 +480,7 @@
     els.setScrim.hidden = true
     showToast('设置已保存')
     startRealtime()
+    refreshRecent()
   }
 
   // ===== 更多菜单 =====
@@ -431,6 +502,8 @@
           showToast('已同步其他设备的最新修改')
         }
       }
+      // 任何文档增删改 → 刷新"最近"列表
+      refreshRecent()
     })
   }
 
@@ -656,6 +729,7 @@
 
   // 启动实时订阅（已填口令时）
   startRealtime()
+  refreshRecent()
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

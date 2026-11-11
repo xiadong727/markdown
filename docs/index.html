@@ -433,13 +433,37 @@
   .fld-hint { display: block; font-size: 12px; color: var(--muted); margin-top: 5px; }
   .fld-sep { font-size: 13px; font-weight: 600; color: var(--accent); margin: 4px 0 14px; }
 
-  .polish-arrow { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0; }
-  #polishOut {
+  .polish-arrow { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0; }  #polishOut {
     width: 100%; box-sizing: border-box;
     border: 1px solid var(--border); border-radius: 10px;
     background: var(--bg); color: var(--ink);
     font-size: 15px; padding: 10px 12px; resize: vertical; font-family: inherit;
   }
+
+  /* ---- 最近打开 ---- */
+  .recent-box {
+    margin-top: 22px;
+    width: 100%;
+    max-width: 420px;
+    text-align: left;
+  }
+  .recent-title { font-size: 13px; color: var(--muted); margin: 0 0 8px 2px; }
+  .recent-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+  }
+  .recent-item:active { background: var(--quote-bg); }
+  .recent-item .ri-name { flex: 1; min-width: 0; font-size: 15px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recent-item .ri-time { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .toc-list a.recent-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .toc-list a.recent-row .rr-time { font-size: 11px; color: var(--muted); flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -472,6 +496,10 @@
       <button class="open-btn" id="btnOpenBig">打开 Markdown 文件</button>
       <button class="open-btn ghost" id="btnNewBig">新建空白文档</button>
       <p class="hint">也可把 .md 文件拖到此页面 · 可「添加到主屏幕」离线使用</p>
+      <div class="recent-box" id="emptyRecent" hidden>
+        <div class="recent-title">最近打开</div>
+        <div id="emptyRecentList"></div>
+      </div>
     </div>
     <article class="md" id="content" hidden></article>
   </main>
@@ -480,6 +508,8 @@
 
   <div class="scrim" id="scrim"></div>
   <aside class="toc" id="toc">
+    <div class="toc-head" id="recentHead" hidden>最近打开</div>
+    <nav class="toc-list" id="recentList" hidden></nav>
     <div class="toc-head">目录</div>
     <nav class="toc-list" id="tocList"></nav>
     <div class="toc-head" style="border-top:1px solid var(--border)">批注</div>
