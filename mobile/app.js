@@ -491,16 +491,21 @@
   function startRealtime() {
     if (!cloudOn() || !MojiCloud.hasSpace()) return
     if (state.realtimeCh) MojiCloud.unsubscribe(state.realtimeCh)
-    state.realtimeCh = MojiCloud.subscribe((payload) => {
+    state.realtimeCh = MojiCloud.subscribe(async (payload) => {
       const row = payload.new || payload.old
       if (!row) return
-      // 当前打开的文档被其他设备更新 → 提示并热更新
+      // 当前打开的文档被其他设备更新 → 重新拉完整内容再热更新。
+      // 注意：Supabase realtime 的 payload.new 默认只含主键，不含 content，
+      // 所以必须 getDoc 取全量，否则会把正文刷成空白。
       if (state.docId && row.id === state.docId && payload.eventType === 'UPDATE' && !state.editing) {
-        if (payload.new.content !== state.md) {
-          state.notes = Array.isArray(payload.new.notes) ? payload.new.notes : state.notes
-          loadDoc(payload.new.content || '', payload.new.name || state.name, state.docId)
-          showToast('已同步其他设备的最新修改')
-        }
+        try {
+          const d = await MojiCloud.getDoc(state.docId)
+          if (d && d.content !== state.md) {
+            state.notes = Array.isArray(d.notes) ? d.notes : state.notes
+            loadDoc(d.content || '', d.name || state.name, state.docId)
+            showToast('已同步其他设备的最新修改')
+          }
+        } catch (e) { /* 拉取失败则不动当前内容 */ }
       }
       // 任何文档增删改 → 刷新"最近"列表
       refreshRecent()
