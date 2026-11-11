@@ -896,6 +896,17 @@
   startRealtime()
   refreshRecent()
 
+  // 页面重新可见/获得焦点时，刷新「最近打开」并重连实时。
+  // 实时推送不一定可靠（连接可能被浏览器挂起），focus 兜底保证能看到其他设备的新文档。
+  function resync() {
+    if (document.visibilityState === 'hidden') return
+    refreshRecent()
+    startRealtime()
+  }
+  document.addEventListener('visibilitychange', resync)
+  window.addEventListener('focus', resync)
+  window.addEventListener('online', resync)
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').then((reg) => {
