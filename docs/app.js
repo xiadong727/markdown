@@ -298,6 +298,30 @@
     }
   }
 
+  // 本地打开的文档自动上云：同名复用，否则新建。静默进行，失败不打扰。
+  async function autoUpload() {
+    if (!cloudOn() || !MojiCloud.hasSpace()) return
+    if (state.docId) return
+    const name = state.name, md = state.md
+    try {
+      const existing = await MojiCloud.findDocByName(name)
+      if (existing) {
+        // 云端已有同名：只接管 id 并刷新打开时间，不覆盖云端内容
+        if (state.name !== name || state.md !== md) return // 用户已切走
+        state.docId = existing.id
+        els.mnHistory.hidden = false
+        MojiCloud.touchDoc(existing.id)
+      } else {
+        const rec = await MojiCloud.createDoc(name, md, state.notes)
+        if (state.name !== name || state.md !== md) return
+        state.docId = rec.id
+        els.mnHistory.hidden = false
+      }
+      persistDoc()
+      refreshRecent()
+    } catch (e) { /* 自动上云失败就静默，用户仍可手动💾 */ }
+  }
+
   async function openCloudLib() {
     closeMenu()
     if (!cloudOn()) { showToast('云功能不可用'); return }
@@ -721,7 +745,7 @@
   function readFile(file) {
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => loadDoc(String(reader.result), file.name)
+    reader.onload = () => { loadDoc(String(reader.result), file.name); autoUpload() }
     reader.onerror = () => alert('读取文件失败')
     reader.readAsText(file, 'utf-8')
   }

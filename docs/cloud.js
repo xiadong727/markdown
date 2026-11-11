@@ -58,6 +58,20 @@
     return data
   }
 
+  // 按文件名在当前 space 查一篇（用于本地打开自动上云的去重）
+  async function findDocByName(name) {
+    if (!ready() || !name) return null
+    const { data, error } = await sb
+      .from('docs')
+      .select('*')
+      .eq('space_key', getSpace())
+      .eq('name', name)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+    if (error) throw error
+    return (data && data[0]) || null
+  }
+
   // 标记"最近打开"：仅更新 updated_at，不产生版本快照
   async function touchDoc(id) {
     try {
@@ -170,7 +184,7 @@
     getSpace, setSpace, hasSpace,
     getAI, setAI, hasAI,
     ready,
-    listDocs, getDoc, createDoc, saveDoc, deleteDoc,
+    listDocs, getDoc, findDocByName, createDoc, saveDoc, deleteDoc,
     touchDoc,
     listVersions,
     subscribe, unsubscribe,
