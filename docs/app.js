@@ -39,6 +39,7 @@
     polishRetry: $('polishRetry'),
     polishCopy: $('polishCopy'),
     polishApply: $('polishApply'),
+    aiFab: $('aiFab'),
     recentHead: $('recentHead'),
     recentList: $('recentList'),
     emptyRecent: $('emptyRecent'),
@@ -261,6 +262,7 @@
     els.btnSave.hidden = false
     els.mnHistory.hidden = !state.docId
     els.btnEdit.textContent = '✏️'
+    els.aiFab.hidden = false
 
     if (state.name) {
       els.title.textContent = state.name
@@ -824,11 +826,13 @@
   $('setSave').addEventListener('click', saveSettings)
 
   // AI 润色弹层
-  $('mnPolish').addEventListener('click', () => {
+  function openPolishFromSelection() {
     const sel = window.getSelection()
     const t = sel && !sel.isCollapsed ? sel.toString().trim() : ''
     openPolish(t)
-  })
+  }
+  $('mnPolish').addEventListener('click', openPolishFromSelection)
+  els.aiFab.addEventListener('click', openPolishFromSelection)
   $('polishRun').addEventListener('click', runPolish)
   $('polishRetry').addEventListener('click', runPolish)
   $('polishCopy').addEventListener('click', copyPolish)

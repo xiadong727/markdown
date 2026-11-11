@@ -484,6 +484,24 @@
   #polishInstr { resize: none; }
   .polish-label { font-size: 13px; font-weight: 600; color: var(--accent); margin: 2px 0 6px; }
 
+  /* ---- 右下角 AI 润色悬浮球 ---- */
+  .ai-fab {
+    position: fixed;
+    right: calc(18px + env(safe-area-inset-right));
+    bottom: calc(22px + env(safe-area-inset-bottom));
+    z-index: 54;
+    width: 54px; height: 54px;
+    border: none; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-size: 24px; line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0,0,0,.28);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .14s ease, box-shadow .14s ease, opacity .2s;
+  }
+  .ai-fab:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,.34); }
+  .ai-fab:active { transform: scale(.94); }
+
   /* ---- 最近打开 ---- */
   .recent-box {
     margin-top: 22px;
@@ -641,6 +659,9 @@
       </div>
     </div>
   </div>
+
+  <!-- 右下角 AI 润色悬浮球 -->
+  <button class="ai-fab" id="aiFab" title="AI 润色" aria-label="AI 润色" hidden>✨</button>
 
   <!-- AI 润色 -->
   <div class="note-scrim" id="polishScrim" hidden>
