@@ -1,0 +1,4 @@
+project_id = "uriexaurqzndddnefzfk"
+
+[functions.ai-polish]
+verify_jwt = true

@@ -144,46 +144,42 @@
   }
   function unsubscribe(ch) { if (ch && sb) try { sb.removeChannel(ch) } catch (e) { /* ignore */ } }
 
-  // ---- AI 润色（OpenAI 兼容 chat/completions）----
+  // ---- AI 润色 ----
+  // 走 Supabase Edge Function 代理（服务端转发），绕开服务商不开放 CORS 的问题。
+  // apiKey 随请求传给代理，仅本次转发使用，不落盘。
   async function polish(text, instruction) {
     const a = getAI()
     if (!a.baseUrl || !a.model || !a.apiKey) throw new Error('AI 未配置')
-    const url = a.baseUrl.replace(/\/+$/, '') + '/chat/completions'
-    const sys = '你是中文写作润色助手。请在不改变原意的前提下，让文字更通顺、准确、简洁。' +
-      '只输出润色后的正文本身，不要加任何解释、前后缀或引号。'
-    const user = (instruction ? ('要求：' + instruction + '\n\n') : '') + '待润色文字：\n' + text
-    if (/^http:\/\//i.test(url) && location.protocol === 'https:') {
-      throw new Error('接口地址是 http://，会被网页（https）拦截。请把 baseUrl 改成 https://，或用支持 https 的中转站。')
-    }
+    if (!sb) throw new Error('云端未就绪，无法调用润色代理')
+
+    const url = SUPABASE_URL.replace(/\/+$/, '') + '/functions/v1/ai-polish'
     let res
     try {
       res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + a.apiKey,
+          'Authorization': 'Bearer ' + SUPABASE_ANON,
+          'apikey': SUPABASE_ANON,
         },
         body: JSON.stringify({
+          baseUrl: a.baseUrl,
           model: a.model,
-          messages: [
-            { role: 'system', content: sys },
-            { role: 'user', content: user },
-          ],
-          temperature: 0.6,
-          stream: false,
+          apiKey: a.apiKey,
+          text,
+          instruction: instruction || '',
         }),
       })
     } catch (e) {
-      // fetch 在拿到响应前就抛错：几乎都是 CORS 被拦 / 地址写错 / 网络不通
-      throw new Error('请求发不出去（' + (e.message || e) + '）。多半是该服务商不允许浏览器直接调用（CORS），或 baseUrl 填错、网络/代理不通。建议：改用支持浏览器直连（开放 CORS）的中转站，或检查 baseUrl 是否正确。')
+      throw new Error('连不上润色代理（' + (e.message || e) + '）。请确认 Edge Function「ai-polish」已部署，且网络通畅。')
     }
+
+    let json = {}
+    try { json = await res.json() } catch { /* 非 JSON */ }
     if (!res.ok) {
-      let detail = ''
-      try { detail = (await res.json()).error?.message || '' } catch { detail = await res.text().catch(() => '') }
-      throw new Error('AI 请求失败 ' + res.status + (detail ? '：' + detail : ''))
+      throw new Error(json.error || ('润色代理返回错误 ' + res.status))
     }
-    const json = await res.json()
-    const out = json.choices?.[0]?.message?.content
+    const out = json.content
     if (!out) throw new Error('AI 返回为空')
     return out.trim()
   }
