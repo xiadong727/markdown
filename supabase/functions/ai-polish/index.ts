@@ -37,10 +37,15 @@ Deno.serve(async (req) => {
   if (!text.trim() && !instruction) return json({ error: '原文和润色要求不能都为空' }, 400)
 
   const url = baseUrl.replace(/\/+$/, '') + '/chat/completions'
-  const sys = '你是中文写作润色助手。请在不改变原意的前提下，让文字更通顺、准确、简洁。' +
-    '只输出润色后的正文本身，不要加任何解释、前后缀或引号。'
-  const user = (instruction ? ('要求：' + instruction + '\n\n') : '') +
-    (text.trim() ? ('待润色文字：\n' + text) : '（没有给出原文，请根据上面的要求直接生成。）')
+  const sys = instruction
+    ? '你是中文写作助手。用户会给出一段文字和一条修改要求，你要严格按照「修改要求」改写这段文字——' +
+      '该重写就大胆重写、该调整结构就调整，不要只做标点或个别词语的微调。' +
+      '在满足要求的前提下保持信息准确。只输出改写后的正文本身，不要任何解释、前后缀或引号。'
+    : '你是中文写作润色助手。请让文字更通顺、准确、生动，可以调整措辞、语序和句子结构，' +
+      '不要只做标点或个别词语的微调，但不要改变原意、不要增删关键信息。' +
+      '只输出润色后的正文本身，不要任何解释、前后缀或引号。'
+  const user = (instruction ? ('修改要求：' + instruction + '\n\n') : '') +
+    (text.trim() ? ('原文：\n' + text) : '（没有给出原文，请根据上面的要求直接生成。）')
 
   let res: Response
   try {
