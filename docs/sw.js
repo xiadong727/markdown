@@ -1,5 +1,5 @@
 // 墨记阅读 Service Worker · 离线缓存
-const CACHE = 'moji-reader-v13'
+const CACHE = 'moji-reader-v14'
 const ASSETS = [
   './',
   './index.html',

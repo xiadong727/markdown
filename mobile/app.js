@@ -12,7 +12,6 @@
     noteList: $('noteList'),
     scrim: $('scrim'),
     fileInput: $('fileInput'),
-    selPop: $('selPop'),
     noteScrim: $('noteScrim'),
     noteQuote: $('noteQuote'),
     noteText: $('noteText'),
@@ -508,9 +507,9 @@
 
   async function runPolish() {
     const src = els.polishOrig.value.trim()
-    if (!src) { showToast('请先填入要润色的文字'); els.polishOrig.focus(); return }
-    if (!cloudOn() || !MojiCloud.hasAI()) { showToast('请先在设置里填 AI 接口'); openSettings(); return }
     const instr = els.polishInstr.value.trim()
+    if (!src && !instr) { showToast('请填入原文，或至少写一条润色要求'); els.polishOrig.focus(); return }
+    if (!cloudOn() || !MojiCloud.hasAI()) { showToast('请先在设置里填 AI 接口'); openSettings(); return }
     state.polishSrc = src  // 记住本次润色的原文，用于「替换原文」时定位
     els.polishOut.value = ''
     els.polishOut.placeholder = 'AI 润色中…'
@@ -609,7 +608,6 @@
     // 就地编辑：保持阅读视图，开启后点某块即可编辑该块。
     state.editing = on
     state.blkEditing = on
-    hideSelPop()
     if (on) {
       els.editor.hidden = true
       els.content.hidden = false
@@ -681,20 +679,6 @@
       renderReader()
     }
   }
-
-  function onSelection() {
-    if (state.editing) return
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed) { hideSelPop(); return }
-    const text = sel.toString().trim()
-    if (!text || text.length > 2000) { hideSelPop(); return }
-    const anchor = sel.anchorNode
-    if (!anchor || !els.content.contains(anchor.nodeType === 1 ? anchor : anchor.parentNode)) { hideSelPop(); return }
-
-    state.pendingSel = { quote: text }
-    els.selPop.hidden = false
-  }
-  function hideSelPop() { els.selPop.hidden = true }
 
   function addNote(quote, text) {
     const id = 'n' + Date.now() + Math.random().toString(36).slice(2, 6)
@@ -845,39 +829,11 @@
   $('btnNewBig').addEventListener('click', () => { loadDoc('# 新文档\n\n正文…\n', '未命名.md'); setEditing(true); openFirstBlock() })
   els.fileInput.addEventListener('change', (e) => readFile(e.target.files[0]))
 
-  document.addEventListener('selectionchange', onSelection)
   els.content.addEventListener('click', (e) => {
     if (state.blkEditing) {
       const wrap = e.target.closest('.blk')
       if (wrap) { beginBlockEdit(wrap); return }
     }
-    if (!e.target.closest('mark.note-mark')) hideSelPop()
-  })
-
-  // 阻止按下操作条按钮时抢走选区（否则选区塌陷会先关掉工具条）
-  ;['selHighlight', 'selNote', 'selPolish'].forEach((id) => {
-    $(id).addEventListener('mousedown', (e) => e.preventDefault())
-    $(id).addEventListener('touchstart', (e) => e.preventDefault(), { passive: false })
-  })
-
-  $('selHighlight').addEventListener('click', (e) => {
-    e.preventDefault()
-    if (state.pendingSel) addNote(state.pendingSel.quote, '')
-    window.getSelection().removeAllRanges()
-    hideSelPop()
-  })
-  $('selNote').addEventListener('click', (e) => {
-    e.preventDefault()
-    if (state.pendingSel) openNewNoteSheet(state.pendingSel.quote)
-    window.getSelection().removeAllRanges()
-    hideSelPop()
-  })
-  $('selPolish').addEventListener('click', (e) => {
-    e.preventDefault()
-    const q = state.pendingSel && state.pendingSel.quote
-    window.getSelection().removeAllRanges()
-    hideSelPop()
-    openPolish(q || '')
   })
 
   els.noteDelete.addEventListener('click', deleteNote)

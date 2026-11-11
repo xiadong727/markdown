@@ -302,42 +302,6 @@
   }
   .add-blk:hover { border-color: var(--accent); color: var(--accent); }
 
-  /* ---- 选中后底部操作条（固定底部，避开系统选中菜单）---- */
-  .sel-pop {
-    position: fixed;
-    left: 50%;
-    bottom: calc(20px + env(safe-area-inset-bottom));
-    transform: translateX(-50%) translateY(16px);
-    z-index: 55;
-    display: flex;
-    gap: 6px;
-    padding: 8px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    box-shadow: 0 6px 24px rgba(0,0,0,.28);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .18s ease, transform .18s ease;
-  }
-  .sel-pop:not([hidden]) {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-    pointer-events: auto;
-  }
-  .sel-pop button {
-    border: none;
-    background: var(--accent);
-    color: #fff;
-    font-size: 15px;
-    font-weight: 600;
-    padding: 10px 22px;
-    border-radius: 999px;
-    cursor: pointer;
-  }
-  .sel-pop button.ghost { background: var(--border); color: var(--ink); }
-  .sel-pop button:active { opacity: .82; }
-
   /* ---- 批注编辑弹层 ---- */
   .note-scrim {
     position: fixed; inset: 0;
@@ -579,13 +543,6 @@
     <nav class="toc-list" id="noteList"></nav>
   </aside>
 
-  <!-- 选中文字后底部弹出的工具条 -->
-  <div class="sel-pop" id="selPop" hidden>
-    <button id="selHighlight" class="ghost">高亮</button>
-    <button id="selNote">批注</button>
-    <button id="selPolish">✨ AI润色</button>
-  </div>
-
   <!-- 批注编辑弹层 -->
   <div class="note-scrim" id="noteScrim" hidden>
     <div class="note-sheet">
@@ -666,8 +623,8 @@
   <!-- AI 润色 -->
   <div class="note-scrim" id="polishScrim" hidden>
     <div class="note-sheet">
-      <div class="polish-label">原文（可编辑）</div>
-      <textarea id="polishOrig" placeholder="在此粘贴 / 输入要润色的文字，或先在正文里选中一段…" rows="4"></textarea>
+      <div class="polish-label">原文（可编辑，可留空）</div>
+      <textarea id="polishOrig" placeholder="粘贴 / 输入要润色的文字；也可留空，只写下面的要求让 AI 直接生成…" rows="4"></textarea>
       <div class="polish-label">润色要求（可留空）</div>
       <input id="polishInstr" type="text" placeholder="例如：更口语、更简洁、更正式、改成标题…" />
       <div class="note-actions">

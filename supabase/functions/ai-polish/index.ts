@@ -34,12 +34,13 @@ Deno.serve(async (req) => {
   const instruction = String(payload.instruction || '').trim()
 
   if (!baseUrl || !model || !apiKey) return json({ error: 'AI 未配置（缺 baseUrl/model/apiKey）' }, 400)
-  if (!text.trim()) return json({ error: '待润色文字为空' }, 400)
+  if (!text.trim() && !instruction) return json({ error: '原文和润色要求不能都为空' }, 400)
 
   const url = baseUrl.replace(/\/+$/, '') + '/chat/completions'
   const sys = '你是中文写作润色助手。请在不改变原意的前提下，让文字更通顺、准确、简洁。' +
     '只输出润色后的正文本身，不要加任何解释、前后缀或引号。'
-  const user = (instruction ? ('要求：' + instruction + '\n\n') : '') + '待润色文字：\n' + text
+  const user = (instruction ? ('要求：' + instruction + '\n\n') : '') +
+    (text.trim() ? ('待润色文字：\n' + text) : '（没有给出原文，请根据上面的要求直接生成。）')
 
   let res: Response
   try {
