@@ -152,22 +152,31 @@
     const sys = '你是中文写作润色助手。请在不改变原意的前提下，让文字更通顺、准确、简洁。' +
       '只输出润色后的正文本身，不要加任何解释、前后缀或引号。'
     const user = (instruction ? ('要求：' + instruction + '\n\n') : '') + '待润色文字：\n' + text
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + a.apiKey,
-      },
-      body: JSON.stringify({
-        model: a.model,
-        messages: [
-          { role: 'system', content: sys },
-          { role: 'user', content: user },
-        ],
-        temperature: 0.6,
-        stream: false,
-      }),
-    })
+    if (/^http:\/\//i.test(url) && location.protocol === 'https:') {
+      throw new Error('接口地址是 http://，会被网页（https）拦截。请把 baseUrl 改成 https://，或用支持 https 的中转站。')
+    }
+    let res
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + a.apiKey,
+        },
+        body: JSON.stringify({
+          model: a.model,
+          messages: [
+            { role: 'system', content: sys },
+            { role: 'user', content: user },
+          ],
+          temperature: 0.6,
+          stream: false,
+        }),
+      })
+    } catch (e) {
+      // fetch 在拿到响应前就抛错：几乎都是 CORS 被拦 / 地址写错 / 网络不通
+      throw new Error('请求发不出去（' + (e.message || e) + '）。多半是该服务商不允许浏览器直接调用（CORS），或 baseUrl 填错、网络/代理不通。建议：改用支持浏览器直连（开放 CORS）的中转站，或检查 baseUrl 是否正确。')
+    }
     if (!res.ok) {
       let detail = ''
       try { detail = (await res.json()).error?.message || '' } catch { detail = await res.text().catch(() => '') }
