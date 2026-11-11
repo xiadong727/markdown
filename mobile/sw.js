@@ -1,9 +1,10 @@
 // 墨记阅读 Service Worker · 离线缓存
-const CACHE = 'moji-reader-v3'
+const CACHE = 'moji-reader-v4'
 const ASSETS = [
   './',
   './index.html',
   './app.js',
+  './cloud.js',
   './manifest.webmanifest',
   './favicon.png',
   './icon-180.png',
@@ -12,6 +13,7 @@ const ASSETS = [
   './lib/marked.min.js',
   './lib/highlight.min.js',
   './lib/purify.min.js',
+  './lib/supabase.min.js',
   './lib/hljs-github.css',
 ]
 

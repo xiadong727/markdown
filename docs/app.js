@@ -19,6 +19,23 @@
     noteDelete: $('noteDelete'),
     btnEdit: $('btnEdit'),
     btnExport: $('btnExport'),
+    btnSave: $('btnSave'),
+    menuScrim: $('menuScrim'),
+    cloudScrim: $('cloudScrim'),
+    cloudList: $('cloudList'),
+    histScrim: $('histScrim'),
+    histList: $('histList'),
+    setScrim: $('setScrim'),
+    setSpace: $('setSpace'),
+    aiBase: $('aiBase'),
+    aiModel: $('aiModel'),
+    aiKey: $('aiKey'),
+    mnHistory: $('mnHistory'),
+    polishScrim: $('polishScrim'),
+    polishOrig: $('polishOrig'),
+    polishOut: $('polishOut'),
+    polishRetry: $('polishRetry'),
+    polishApply: $('polishApply'),
   }
 
   const STORE = {
@@ -36,6 +53,9 @@
     notes: [],
     pendingSel: null,
     editingNoteId: null,
+    docId: null,       // 云文档 id，null = 未上云
+    polishedText: '',  // AI 润色结果
+    realtimeCh: null,
   }
 
   function applyTheme(t) {
@@ -184,16 +204,19 @@
   function openToc() { els.toc.classList.add('show'); els.scrim.classList.add('show') }
   function closeToc() { els.toc.classList.remove('show'); els.scrim.classList.remove('show') }
 
-  function loadDoc(md, name) {
+  function loadDoc(md, name, docId) {
     state.md = md
     state.name = name || ''
     state.editing = false
+    state.docId = docId || null
     loadNotes()
 
     els.empty.hidden = true
     els.content.hidden = false
     els.editor.hidden = true
     els.btnExport.hidden = false
+    els.btnSave.hidden = false
+    els.mnHistory.hidden = !state.docId
     els.btnEdit.textContent = '✏️'
 
     if (state.name) {
@@ -210,6 +233,205 @@
       localStorage.setItem(STORE.doc, state.md)
       if (state.name) localStorage.setItem(STORE.name, state.name)
     } catch { /* too large */ }
+  }
+
+  // ===== 云同步 =====
+  function cloudOn() { return window.MojiCloud && MojiCloud.available() }
+
+  async function saveToCloud() {
+    if (state.editing) state.md = els.editor.value
+    if (!cloudOn()) { showToast('云功能不可用'); return }
+    if (!MojiCloud.hasSpace()) { showToast('请先在设置里填同步口令'); openSettings(); return }
+    try {
+      showToast('保存中…')
+      if (state.docId) {
+        await MojiCloud.saveDoc(state.docId, state.name, state.md, state.notes)
+      } else {
+        const rec = await MojiCloud.createDoc(state.name, state.md, state.notes)
+        state.docId = rec.id
+        els.mnHistory.hidden = false
+      }
+      persistDoc()
+      showToast('已保存到云 ✓')
+    } catch (e) {
+      showToast('保存失败：' + (e.message || e))
+    }
+  }
+
+  async function openCloudLib() {
+    closeMenu()
+    if (!cloudOn()) { showToast('云功能不可用'); return }
+    if (!MojiCloud.hasSpace()) { showToast('请先在设置里填同步口令'); openSettings(); return }
+    els.cloudScrim.hidden = false
+    els.cloudList.innerHTML = '<div class="list-empty">加载中…</div>'
+    try {
+      const docs = await MojiCloud.listDocs()
+      renderCloudList(docs)
+    } catch (e) {
+      els.cloudList.innerHTML = '<div class="list-empty">加载失败：' + (e.message || e) + '</div>'
+    }
+  }
+
+  function renderCloudList(docs) {
+    if (!docs.length) {
+      els.cloudList.innerHTML = '<div class="list-empty">云端还没有文档。<br>打开或新建一篇后点「新建并上传当前」。</div>'
+      return
+    }
+    els.cloudList.innerHTML = ''
+    docs.forEach((d) => {
+      const row = document.createElement('div')
+      row.className = 'doc-row'
+      const main = document.createElement('div')
+      main.className = 'dr-main'
+      main.innerHTML = '<div class="dr-name"></div><div class="dr-time"></div>'
+      main.querySelector('.dr-name').textContent = d.name || '未命名.md'
+      main.querySelector('.dr-time').textContent = fmtTime(d.updated_at)
+      main.addEventListener('click', () => openCloudDoc(d.id))
+      const del = document.createElement('button')
+      del.className = 'dr-del'
+      del.textContent = '🗑'
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        if (!confirm('删除「' + (d.name || '') + '」？历史版本也会一并删除。')) return
+        try { await MojiCloud.deleteDoc(d.id); row.remove() } catch (err) { showToast('删除失败') }
+      })
+      row.appendChild(main)
+      row.appendChild(del)
+      els.cloudList.appendChild(row)
+    })
+  }
+
+  async function openCloudDoc(id) {
+    try {
+      const d = await MojiCloud.getDoc(id)
+      els.cloudScrim.hidden = true
+      state.notes = Array.isArray(d.notes) ? d.notes : []
+      saveNotes2(id, state.notes)
+      loadDoc(d.content || '', d.name || '未命名.md', d.id)
+    } catch (e) { showToast('打开失败：' + (e.message || e)) }
+  }
+
+  function fmtTime(iso) {
+    try {
+      const d = new Date(iso)
+      const p = (n) => String(n).padStart(2, '0')
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes())
+    } catch { return '' }
+  }
+  function saveNotes2(id, notes) {
+    try { localStorage.setItem(STORE.notes + (id || ''), JSON.stringify(notes)) } catch { /* ignore */ }
+  }
+
+  // ===== 历史版本 =====
+  async function openHistory() {
+    closeMenu()
+    if (!state.docId) { showToast('先保存到云才有历史版本'); return }
+    els.histScrim.hidden = false
+    els.histList.innerHTML = '<div class="list-empty">加载中…</div>'
+    try {
+      const vers = await MojiCloud.listVersions(state.docId)
+      if (!vers.length) { els.histList.innerHTML = '<div class="list-empty">暂无历史版本。<br>每次保存都会生成一个快照。</div>'; return }
+      els.histList.innerHTML = ''
+      vers.forEach((v, i) => {
+        const row = document.createElement('div')
+        row.className = 'doc-row'
+        const main = document.createElement('div')
+        main.className = 'dr-main'
+        main.innerHTML = '<div class="dr-name"></div><div class="dr-time"></div>'
+        main.querySelector('.dr-name').textContent = (i === 0 ? '最新 · ' : '') + fmtTime(v.created_at)
+        main.querySelector('.dr-time').textContent = (v.content || '').slice(0, 40).replace(/\n/g, ' ') + '…'
+        main.addEventListener('click', () => {
+          if (!confirm('回滚到此版本？当前未保存内容会被覆盖。')) return
+          els.histScrim.hidden = true
+          loadDoc(v.content || '', v.name || state.name, state.docId)
+          showToast('已回滚（记得再点保存以固化）')
+        })
+        row.appendChild(main)
+        els.histList.appendChild(row)
+      })
+    } catch (e) {
+      els.histList.innerHTML = '<div class="list-empty">加载失败：' + (e.message || e) + '</div>'
+    }
+  }
+
+  // ===== AI 润色 =====
+  async function runPolish(text) {
+    if (!cloudOn() || !MojiCloud.hasAI()) { showToast('请先在设置里填 AI 接口'); openSettings(); return }
+    state.pendingSel = { quote: text }
+    els.polishOrig.textContent = text
+    els.polishOut.value = ''
+    els.polishApply.hidden = true
+    els.polishRetry.hidden = true
+    els.polishScrim.hidden = false
+    els.polishOut.placeholder = 'AI 润色中…'
+    try {
+      const out = await MojiCloud.polish(text, '')
+      state.polishedText = out
+      els.polishOut.value = out
+      els.polishApply.hidden = false
+      els.polishRetry.hidden = false
+    } catch (e) {
+      els.polishOut.placeholder = ''
+      els.polishOut.value = '【失败】' + (e.message || e)
+      els.polishRetry.hidden = false
+    }
+  }
+
+  function applyPolish() {
+    const q = state.pendingSel && state.pendingSel.quote
+    const out = els.polishOut.value.trim()
+    if (!q || !out) { els.polishScrim.hidden = true; return }
+    // 在正文 Markdown 源码里替换选中片段
+    const idx = state.md.indexOf(q)
+    if (idx !== -1) {
+      state.md = state.md.slice(0, idx) + out + state.md.slice(idx + q.length)
+      renderReader()
+      persistDoc()
+      showToast('已替换（记得点保存同步到云）')
+    } else {
+      showToast('未能定位原文位置，可手动复制')
+    }
+    els.polishScrim.hidden = true
+  }
+
+  // ===== 设置 =====
+  function openSettings() {
+    closeMenu()
+    const ai = MojiCloud.getAI()
+    els.setSpace.value = MojiCloud.getSpace()
+    els.aiBase.value = ai.baseUrl || ''
+    els.aiModel.value = ai.model || ''
+    els.aiKey.value = ai.apiKey || ''
+    els.setScrim.hidden = false
+  }
+  function saveSettings() {
+    MojiCloud.setSpace(els.setSpace.value)
+    MojiCloud.setAI({ baseUrl: els.aiBase.value.trim(), model: els.aiModel.value.trim(), apiKey: els.aiKey.value.trim() })
+    els.setScrim.hidden = true
+    showToast('设置已保存')
+    startRealtime()
+  }
+
+  // ===== 更多菜单 =====
+  function openMenu() { els.menuScrim.hidden = false }
+  function closeMenu() { els.menuScrim.hidden = true }
+
+  // ===== 实时订阅 =====
+  function startRealtime() {
+    if (!cloudOn() || !MojiCloud.hasSpace()) return
+    if (state.realtimeCh) MojiCloud.unsubscribe(state.realtimeCh)
+    state.realtimeCh = MojiCloud.subscribe((payload) => {
+      const row = payload.new || payload.old
+      if (!row) return
+      // 当前打开的文档被其他设备更新 → 提示并热更新
+      if (state.docId && row.id === state.docId && payload.eventType === 'UPDATE' && !state.editing) {
+        if (payload.new.content !== state.md) {
+          state.notes = Array.isArray(payload.new.notes) ? payload.new.notes : state.notes
+          loadDoc(payload.new.content || '', payload.new.name || state.name, state.docId)
+          showToast('已同步其他设备的最新修改')
+        }
+      }
+    })
   }
 
   function setEditing(on) {
@@ -332,14 +554,15 @@
     reader.readAsText(file, 'utf-8')
   }
 
-  $('btnTheme').addEventListener('click', () => {
+  function toggleTheme() {
     const cur = document.documentElement.getAttribute('data-theme')
     applyTheme(cur === 'dark' ? 'light' : 'dark')
-  })
-  $('btnSize').addEventListener('click', () => {
+  }
+  function cycleSize() {
     sizeIdx = (sizeIdx + 1) % SIZES.length
     applySize()
-  })
+  }
+
   $('btnToc').addEventListener('click', openToc)
   els.scrim.addEventListener('click', closeToc)
 
@@ -348,9 +571,38 @@
     setEditing(!state.editing)
   })
   els.btnExport.addEventListener('click', exportDoc)
+  els.btnSave.addEventListener('click', saveToCloud)
+
+  // 顶栏「云」「更多」
+  $('btnCloud').addEventListener('click', openCloudLib)
+  $('btnMore').addEventListener('click', openMenu)
+  els.menuScrim.addEventListener('click', (e) => { if (e.target === els.menuScrim) closeMenu() })
+  $('mnSize').addEventListener('click', () => { cycleSize() })
+  $('mnTheme').addEventListener('click', () => { toggleTheme() })
+  $('mnOpen').addEventListener('click', () => { closeMenu(); pick() })
+  $('mnHistory').addEventListener('click', openHistory)
+  $('mnSettings').addEventListener('click', openSettings)
+
+  // 云库 / 历史 / 设置 弹层
+  $('cloudClose').addEventListener('click', () => { els.cloudScrim.hidden = true })
+  $('cloudNew').addEventListener('click', async () => {
+    if (els.empty.hidden !== false) { showToast('先打开或新建一篇文档'); return }
+    state.docId = null
+    await saveToCloud()
+    openCloudLib()
+  })
+  $('histClose').addEventListener('click', () => { els.histScrim.hidden = true })
+  $('setClose').addEventListener('click', () => { els.setScrim.hidden = true })
+  $('setSave').addEventListener('click', saveSettings)
+
+  // AI 润色弹层
+  $('polishCancel').addEventListener('click', () => { els.polishScrim.hidden = true })
+  $('polishApply').addEventListener('click', applyPolish)
+  $('polishRetry').addEventListener('click', () => {
+    if (state.pendingSel) runPolish(state.pendingSel.quote)
+  })
 
   const pick = () => els.fileInput.click()
-  $('btnOpen').addEventListener('click', pick)
   $('btnOpenBig').addEventListener('click', pick)
   $('btnNewBig').addEventListener('click', () => { loadDoc('# 新文档\n\n', '未命名.md'); setEditing(true) })
   els.fileInput.addEventListener('change', (e) => readFile(e.target.files[0]))
@@ -361,7 +613,7 @@
   })
 
   // 阻止按下操作条按钮时抢走选区（否则选区塌陷会先关掉工具条）
-  ;['selHighlight', 'selNote'].forEach((id) => {
+  ;['selHighlight', 'selNote', 'selPolish'].forEach((id) => {
     $(id).addEventListener('mousedown', (e) => e.preventDefault())
     $(id).addEventListener('touchstart', (e) => e.preventDefault(), { passive: false })
   })
@@ -377,6 +629,13 @@
     if (state.pendingSel) openNewNoteSheet(state.pendingSel.quote)
     window.getSelection().removeAllRanges()
     hideSelPop()
+  })
+  $('selPolish').addEventListener('click', (e) => {
+    e.preventDefault()
+    const q = state.pendingSel && state.pendingSel.quote
+    window.getSelection().removeAllRanges()
+    hideSelPop()
+    if (q) runPolish(q)
   })
 
   els.noteDelete.addEventListener('click', deleteNote)
@@ -394,6 +653,9 @@
 
   const last = localStorage.getItem(STORE.doc)
   if (last) loadDoc(last, localStorage.getItem(STORE.name) || '')
+
+  // 启动实时订阅（已填口令时）
+  startRealtime()
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

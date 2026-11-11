@@ -351,17 +351,117 @@
   .note-list-item { display: block; padding: 10px 18px; border-left: 3px solid var(--accent); }
   .note-list-item .nq { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
   .note-list-item .nt { font-size: 14px; color: var(--ink); }
+
+  /* ---- 更多菜单 ---- */
+  .menu-scrim { position: fixed; inset: 0; z-index: 58; }
+  .menu-sheet {
+    position: fixed;
+    top: calc(50px + env(safe-area-inset-top));
+    right: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.22);
+    padding: 6px;
+    min-width: 190px;
+    display: flex;
+    flex-direction: column;
+  }
+  .menu-item {
+    text-align: left;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-size: 15px;
+    padding: 11px 14px;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .menu-item:active { background: var(--quote-bg); }
+
+  /* ---- 大弹层（云库 / 历史 / 设置）---- */
+  .sheet-scrim {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 62;
+    display: flex;
+    align-items: flex-end;
+  }
+  .big-sheet {
+    width: 100%;
+    max-height: 82vh;
+    background: var(--panel);
+    border-radius: 18px 18px 0 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .big-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 16px 12px;
+    font-size: 16px; font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .big-body { overflow-y: auto; padding: 8px 0; flex: 1; }
+  .big-foot { padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
+  .set-body { padding: 16px; }
+
+  .doc-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .doc-row:active { background: var(--quote-bg); }
+  .doc-row .dr-main { flex: 1; min-width: 0; }
+  .doc-row .dr-name { font-size: 15px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-row .dr-time { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .doc-row .dr-del {
+    border: none; background: transparent; color: #c0392b;
+    font-size: 18px; padding: 6px 8px; cursor: pointer; flex-shrink: 0;
+  }
+  .list-empty { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+  .fld { display: block; margin-bottom: 16px; }
+  .fld-label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .fld input {
+    width: 100%; box-sizing: border-box;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); color: var(--ink);
+    font-size: 15px; padding: 11px 12px;
+  }
+  .fld-hint { display: block; font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .fld-sep { font-size: 13px; font-weight: 600; color: var(--accent); margin: 4px 0 14px; }
+
+  .polish-arrow { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0; }
+  #polishOut {
+    width: 100%; box-sizing: border-box;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); color: var(--ink);
+    font-size: 15px; padding: 10px 12px; resize: vertical; font-family: inherit;
+  }
 </style>
 </head>
 <body>
   <div class="topbar">
     <button class="icon-btn" id="btnToc" title="目录" aria-label="目录">☰</button>
     <span class="brand" id="title">墨记阅读</span>
+    <button class="icon-btn" id="btnSave" title="保存到云" aria-label="保存" hidden>💾</button>
     <button class="icon-btn" id="btnEdit" title="编辑" aria-label="编辑">✏️</button>
     <button class="icon-btn" id="btnExport" title="导出" aria-label="导出" hidden>⤓</button>
-    <button class="icon-btn" id="btnSize" title="字号" aria-label="字号">A</button>
-    <button class="icon-btn" id="btnTheme" title="深色" aria-label="深色">◐</button>
-    <button class="icon-btn" id="btnOpen" title="打开" aria-label="打开文件">📂</button>
+    <button class="icon-btn" id="btnCloud" title="云文档" aria-label="云文档">☁</button>
+    <button class="icon-btn" id="btnMore" title="更多" aria-label="更多">⋯</button>
+  </div>
+
+  <!-- 更多菜单 -->
+  <div class="menu-scrim" id="menuScrim" hidden>
+    <div class="menu-sheet">
+      <button class="menu-item" id="mnSize">A 字号</button>
+      <button class="menu-item" id="mnTheme">◐ 深色模式</button>
+      <button class="menu-item" id="mnOpen">📂 打开本地文件</button>
+      <button class="menu-item" id="mnHistory" hidden>🕑 历史版本</button>
+      <button class="menu-item" id="mnSettings">⚙ 设置（口令 / AI）</button>
+    </div>
   </div>
 
   <main class="reader" id="reader">
@@ -386,10 +486,11 @@
     <nav class="toc-list" id="noteList"></nav>
   </aside>
 
-  <!-- 选中文字后底部弹出的批注工具条 -->
+  <!-- 选中文字后底部弹出的工具条 -->
   <div class="sel-pop" id="selPop" hidden>
     <button id="selHighlight" class="ghost">高亮</button>
     <button id="selNote">批注</button>
+    <button id="selPolish">✨ AI润色</button>
   </div>
 
   <!-- 批注编辑弹层 -->
@@ -408,9 +509,84 @@
 
   <input type="file" id="fileInput" accept=".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain" />
 
+  <!-- 云文档库 -->
+  <div class="sheet-scrim" id="cloudScrim" hidden>
+    <div class="big-sheet">
+      <div class="big-head">
+        <span>云文档</span>
+        <button class="np-btn" id="cloudClose">关闭</button>
+      </div>
+      <div class="big-body" id="cloudList"></div>
+      <div class="big-foot">
+        <button class="np-btn primary" id="cloudNew">＋ 新建并上传当前</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 历史版本 -->
+  <div class="sheet-scrim" id="histScrim" hidden>
+    <div class="big-sheet">
+      <div class="big-head">
+        <span>历史版本</span>
+        <button class="np-btn" id="histClose">关闭</button>
+      </div>
+      <div class="big-body" id="histList"></div>
+    </div>
+  </div>
+
+  <!-- 设置：口令 + AI -->
+  <div class="sheet-scrim" id="setScrim" hidden>
+    <div class="big-sheet">
+      <div class="big-head">
+        <span>设置</span>
+        <button class="np-btn" id="setClose">关闭</button>
+      </div>
+      <div class="big-body set-body">
+        <label class="fld">
+          <span class="fld-label">同步口令（两台设备填同一个即可互通）</span>
+          <input type="text" id="setSpace" placeholder="设一个只有你知道的长口令" autocomplete="off" />
+          <span class="fld-hint">越长越随机越安全，比如 moji-7x9k-私密-2026</span>
+        </label>
+        <div class="fld-sep">AI 润色（OpenAI 兼容接口）</div>
+        <label class="fld">
+          <span class="fld-label">接口地址 Base URL</span>
+          <input type="text" id="aiBase" placeholder="如 https://api.deepseek.com/v1" autocomplete="off" />
+        </label>
+        <label class="fld">
+          <span class="fld-label">模型名</span>
+          <input type="text" id="aiModel" placeholder="如 deepseek-chat" autocomplete="off" />
+        </label>
+        <label class="fld">
+          <span class="fld-label">API Key（只存本机，不上传）</span>
+          <input type="password" id="aiKey" placeholder="sk-..." autocomplete="off" />
+        </label>
+      </div>
+      <div class="big-foot">
+        <button class="np-btn primary" id="setSave">保存设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI 润色结果 -->
+  <div class="note-scrim" id="polishScrim" hidden>
+    <div class="note-sheet">
+      <div class="note-quote" id="polishOrig"></div>
+      <div class="polish-arrow">↓ AI 润色后</div>
+      <textarea id="polishOut" placeholder="AI 润色结果…" rows="5"></textarea>
+      <div class="note-actions">
+        <button class="np-btn" id="polishRetry" hidden>重新润色</button>
+        <span style="flex:1"></span>
+        <button class="np-btn" id="polishCancel">取消</button>
+        <button class="np-btn primary" id="polishApply" hidden>替换原文</button>
+      </div>
+    </div>
+  </div>
+
   <script src="lib/marked.min.js"></script>
   <script src="lib/highlight.min.js"></script>
   <script src="lib/purify.min.js"></script>
+  <script src="lib/supabase.min.js"></script>
+  <script src="cloud.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
