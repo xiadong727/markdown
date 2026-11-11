@@ -474,12 +474,15 @@
   .fld-hint { display: block; font-size: 12px; color: var(--muted); margin-top: 5px; }
   .fld-sep { font-size: 13px; font-weight: 600; color: var(--accent); margin: 4px 0 14px; }
 
-  .polish-arrow { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0; }  #polishOut {
+  .polish-arrow { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0; }
+  #polishOut, #polishOrig, #polishInstr {
     width: 100%; box-sizing: border-box;
     border: 1px solid var(--border); border-radius: 10px;
     background: var(--bg); color: var(--ink);
     font-size: 15px; padding: 10px 12px; resize: vertical; font-family: inherit;
   }
+  #polishInstr { resize: none; }
+  .polish-label { font-size: 13px; font-weight: 600; color: var(--accent); margin: 2px 0 6px; }
 
   /* ---- 最近打开 ---- */
   .recent-box {
@@ -525,6 +528,7 @@
       <button class="menu-item" id="mnTheme">◐ 深色模式</button>
       <button class="menu-item" id="mnOpen">📂 打开本地文件</button>
       <button class="menu-item" id="mnHistory" hidden>🕑 历史版本</button>
+      <button class="menu-item" id="mnPolish">✨ AI 润色</button>
       <button class="menu-item" id="mnSettings">⚙ 设置（口令 / AI）</button>
     </div>
   </div>
@@ -638,16 +642,23 @@
     </div>
   </div>
 
-  <!-- AI 润色结果 -->
+  <!-- AI 润色 -->
   <div class="note-scrim" id="polishScrim" hidden>
     <div class="note-sheet">
-      <div class="note-quote" id="polishOrig"></div>
-      <div class="polish-arrow">↓ AI 润色后</div>
-      <textarea id="polishOut" placeholder="AI 润色结果…" rows="5"></textarea>
+      <div class="polish-label">原文（可编辑）</div>
+      <textarea id="polishOrig" placeholder="在此粘贴 / 输入要润色的文字，或先在正文里选中一段…" rows="4"></textarea>
+      <div class="polish-label">润色要求（可留空）</div>
+      <input id="polishInstr" type="text" placeholder="例如：更口语、更简洁、更正式、改成标题…" />
       <div class="note-actions">
+        <button class="np-btn primary" id="polishRun">✨ 开始润色</button>
+      </div>
+      <div class="polish-arrow">↓ AI 润色结果</div>
+      <textarea id="polishOut" placeholder="润色结果会显示在这里…" rows="5"></textarea>
+      <div class="note-actions">
+        <button class="np-btn" id="polishCopy" hidden>复制</button>
         <button class="np-btn" id="polishRetry" hidden>重新润色</button>
         <span style="flex:1"></span>
-        <button class="np-btn" id="polishCancel">取消</button>
+        <button class="np-btn" id="polishCancel">关闭</button>
         <button class="np-btn primary" id="polishApply" hidden>替换原文</button>
       </div>
     </div>

@@ -33,8 +33,11 @@
     mnHistory: $('mnHistory'),
     polishScrim: $('polishScrim'),
     polishOrig: $('polishOrig'),
+    polishInstr: $('polishInstr'),
     polishOut: $('polishOut'),
+    polishRun: $('polishRun'),
     polishRetry: $('polishRetry'),
+    polishCopy: $('polishCopy'),
     polishApply: $('polishApply'),
     recentHead: $('recentHead'),
     recentList: $('recentList'),
@@ -59,6 +62,7 @@
     editingNoteId: null,
     docId: null,       // 云文档 id，null = 未上云
     polishedText: '',  // AI 润色结果
+    polishSrc: '',     // 本次润色的原文（用于替换定位）
     realtimeCh: null,
     blocks: [],        // 当前渲染的顶层 token（marked.lexer）
     blkEditing: false, // 就地块编辑模式开关
@@ -484,43 +488,71 @@
   }
 
   // ===== AI 润色 =====
-  async function runPolish(text) {
+  // 打开润色对话框。text 有值则带入原文（来自选区/菜单），否则留空待输入。
+  function openPolish(text) {
     if (!cloudOn() || !MojiCloud.hasAI()) { showToast('请先在设置里填 AI 接口'); openSettings(); return }
-    state.pendingSel = { quote: text }
-    els.polishOrig.textContent = text
+    closeMenu()
+    els.polishOrig.value = text || ''
+    els.polishInstr.value = ''
     els.polishOut.value = ''
+    els.polishOut.placeholder = '润色结果会显示在这里…'
     els.polishApply.hidden = true
+    els.polishCopy.hidden = true
     els.polishRetry.hidden = true
+    state.polishSrc = ''
     els.polishScrim.hidden = false
+    setTimeout(() => (text ? els.polishInstr : els.polishOrig).focus(), 0)
+  }
+
+  async function runPolish() {
+    const src = els.polishOrig.value.trim()
+    if (!src) { showToast('请先填入要润色的文字'); els.polishOrig.focus(); return }
+    if (!cloudOn() || !MojiCloud.hasAI()) { showToast('请先在设置里填 AI 接口'); openSettings(); return }
+    const instr = els.polishInstr.value.trim()
+    state.polishSrc = src  // 记住本次润色的原文，用于「替换原文」时定位
+    els.polishOut.value = ''
     els.polishOut.placeholder = 'AI 润色中…'
+    els.polishApply.hidden = true
+    els.polishCopy.hidden = true
+    els.polishRetry.hidden = true
+    els.polishRun.disabled = true
     try {
-      const out = await MojiCloud.polish(text, '')
+      const out = await MojiCloud.polish(src, instr)
       state.polishedText = out
       els.polishOut.value = out
       els.polishApply.hidden = false
+      els.polishCopy.hidden = false
       els.polishRetry.hidden = false
     } catch (e) {
       els.polishOut.placeholder = ''
       els.polishOut.value = '【失败】' + (e.message || e)
       els.polishRetry.hidden = false
+    } finally {
+      els.polishRun.disabled = false
     }
   }
 
   function applyPolish() {
-    const q = state.pendingSel && state.pendingSel.quote
+    const q = state.polishSrc
     const out = els.polishOut.value.trim()
     if (!q || !out) { els.polishScrim.hidden = true; return }
-    // 在正文 Markdown 源码里替换选中片段
     const idx = state.md.indexOf(q)
     if (idx !== -1) {
       state.md = state.md.slice(0, idx) + out + state.md.slice(idx + q.length)
       renderReader()
       persistDoc()
       showToast('已替换（记得点保存同步到云）')
+      els.polishScrim.hidden = true
     } else {
-      showToast('未能定位原文位置，可手动复制')
+      showToast('正文里找不到这段原文，可用「复制」手动粘贴')
     }
-    els.polishScrim.hidden = true
+  }
+
+  async function copyPolish() {
+    const out = els.polishOut.value.trim()
+    if (!out) return
+    try { await navigator.clipboard.writeText(out); showToast('已复制') }
+    catch { showToast('复制失败，请手动选择') }
   }
 
   // ===== 设置 =====
@@ -653,7 +685,7 @@
     const sel = window.getSelection()
     if (!sel || sel.isCollapsed) { hideSelPop(); return }
     const text = sel.toString().trim()
-    if (!text || text.length > 200) { hideSelPop(); return }
+    if (!text || text.length > 2000) { hideSelPop(); return }
     const anchor = sel.anchorNode
     if (!anchor || !els.content.contains(anchor.nodeType === 1 ? anchor : anchor.parentNode)) { hideSelPop(); return }
 
@@ -792,11 +824,17 @@
   $('setSave').addEventListener('click', saveSettings)
 
   // AI 润色弹层
-  $('polishCancel').addEventListener('click', () => { els.polishScrim.hidden = true })
-  $('polishApply').addEventListener('click', applyPolish)
-  $('polishRetry').addEventListener('click', () => {
-    if (state.pendingSel) runPolish(state.pendingSel.quote)
+  $('mnPolish').addEventListener('click', () => {
+    const sel = window.getSelection()
+    const t = sel && !sel.isCollapsed ? sel.toString().trim() : ''
+    openPolish(t)
   })
+  $('polishRun').addEventListener('click', runPolish)
+  $('polishRetry').addEventListener('click', runPolish)
+  $('polishCopy').addEventListener('click', copyPolish)
+  $('polishApply').addEventListener('click', applyPolish)
+  $('polishCancel').addEventListener('click', () => { els.polishScrim.hidden = true })
+  els.polishScrim.addEventListener('click', (e) => { if (e.target === els.polishScrim) els.polishScrim.hidden = true })
 
   const pick = () => els.fileInput.click()
   $('btnOpenBig').addEventListener('click', pick)
@@ -835,7 +873,7 @@
     const q = state.pendingSel && state.pendingSel.quote
     window.getSelection().removeAllRanges()
     hideSelPop()
-    if (q) runPolish(q)
+    openPolish(q || '')
   })
 
   els.noteDelete.addEventListener('click', deleteNote)
