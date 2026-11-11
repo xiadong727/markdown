@@ -261,6 +261,47 @@
   html[data-theme="dark"] .md mark.note-mark { background: #6b5a1f; color: #f4efdd; }
   .md mark.note-mark.has-note { border-bottom: 2px solid var(--accent); }
 
+  /* ---- 就地块编辑 ---- */
+  .md.editing .blk {
+    cursor: text;
+    border-radius: 8px;
+    transition: background .12s;
+    padding: 0 6px;
+    margin: 0 -6px;
+  }
+  .md.editing .blk:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .md.editing .blk.blk-editing { background: var(--code-bg); padding: 6px; }
+  textarea.blk-edit {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    outline: none;
+    resize: none;
+    background: var(--panel);
+    color: var(--ink);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.7;
+    padding: 10px 12px;
+    overflow: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+  .add-blk {
+    display: block;
+    width: 100%;
+    margin: 16px 0 40px;
+    padding: 12px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted, #8a8f88);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .add-blk:hover { border-color: var(--accent); color: var(--accent); }
+
   /* ---- 选中后底部操作条（固定底部，避开系统选中菜单）---- */
   .sel-pop {
     position: fixed;

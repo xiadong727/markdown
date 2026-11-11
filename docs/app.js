@@ -60,6 +60,8 @@
     docId: null,       // 云文档 id，null = 未上云
     polishedText: '',  // AI 润色结果
     realtimeCh: null,
+    blocks: [],        // 当前渲染的顶层 token（marked.lexer）
+    blkEditing: false, // 就地块编辑模式开关
   }
 
   function applyTheme(t) {
@@ -101,9 +103,20 @@
   }
 
   function renderReader() {
-    const dirty = marked.parse(state.md)
-    const clean = DOMPurify.sanitize(dirty, { ADD_ATTR: ['target', 'style', 'align'], ADD_TAGS: ['span', 'div', 'mark'] })
-    els.content.innerHTML = clean
+    // 按顶层 token 逐块渲染，每块记住它在源码里的 raw，
+    // 以便「就地编辑」时点哪块改哪块，而不碰整篇源码。
+    const tokens = marked.lexer(state.md)
+    state.blocks = tokens
+    els.content.innerHTML = ''
+    tokens.forEach((tok, i) => {
+      if (tok.type === 'space') return
+      const wrap = document.createElement('div')
+      wrap.className = 'blk'
+      wrap.dataset.blk = String(i)
+      const dirty = marked.parser([tok])
+      wrap.innerHTML = DOMPurify.sanitize(dirty, { ADD_ATTR: ['target', 'style', 'align'], ADD_TAGS: ['span', 'div', 'mark'] })
+      els.content.appendChild(wrap)
+    })
 
     els.content.querySelectorAll('pre code').forEach((block) => {
       try { hljs.highlightElement(block) } catch { /* ignore */ }
@@ -120,6 +133,26 @@
 
     applyHighlights()
     buildNoteList()
+
+    if (state.blkEditing) {
+      const add = document.createElement('button')
+      add.className = 'add-blk'
+      add.textContent = '＋ 新段落'
+      add.addEventListener('click', appendBlock)
+      els.content.appendChild(add)
+    }
+  }
+
+  // 在文末追加一个新段落并立即编辑
+  function appendBlock() {
+    commitActiveBlock()
+    if (state.md && !/\n\n$/.test(state.md)) {
+      state.md += /\n$/.test(state.md) ? '\n' : '\n\n'
+    }
+    state.md += '新段落…\n'
+    renderReader()
+    const blks = els.content.querySelectorAll('.blk')
+    if (blks.length) beginBlockEdit(blks[blks.length - 1])
   }
 
   function applyHighlights() {
@@ -212,11 +245,13 @@
     state.md = md
     state.name = name || ''
     state.editing = false
+    state.blkEditing = false
     state.docId = docId || null
     loadNotes()
 
     els.empty.hidden = true
     els.content.hidden = false
+    els.content.classList.remove('editing')
     els.editor.hidden = true
     els.btnExport.hidden = false
     els.btnSave.hidden = false
@@ -243,7 +278,7 @@
   function cloudOn() { return window.MojiCloud && MojiCloud.available() }
 
   async function saveToCloud() {
-    if (state.editing) state.md = els.editor.value
+    if (state.blkEditing) commitActiveBlock()
     if (!cloudOn()) { showToast('云功能不可用'); return }
     if (!MojiCloud.hasSpace()) { showToast('请先在设置里填同步口令'); openSettings(); return }
     try {
@@ -513,21 +548,79 @@
   }
 
   function setEditing(on) {
+    // 就地编辑：保持阅读视图，开启后点某块即可编辑该块。
     state.editing = on
+    state.blkEditing = on
+    hideSelPop()
     if (on) {
-      els.editor.value = state.md
-      els.editor.hidden = false
-      els.content.hidden = true
-      els.btnEdit.textContent = '✓'
-      hideSelPop()
-      setTimeout(() => els.editor.focus(), 0)
-    } else {
-      state.md = els.editor.value
       els.editor.hidden = true
       els.content.hidden = false
+      els.btnEdit.textContent = '✓'
+      els.content.classList.add('editing')
+      renderReader()
+    } else {
+      commitActiveBlock()
       els.btnEdit.textContent = '✏️'
+      els.content.classList.remove('editing')
       renderReader()
       persistDoc()
+    }
+  }
+
+  // 点击某块 → 原位替换为 textarea，填入该块源码
+  function beginBlockEdit(wrap) {
+    if (!state.blkEditing) return
+    if (wrap.classList.contains('blk-editing')) return
+    commitActiveBlock()
+    const i = +wrap.dataset.blk
+    const tok = state.blocks[i]
+    if (!tok) return
+    const ta = document.createElement('textarea')
+    ta.className = 'blk-edit'
+    ta.value = (tok.raw || '').replace(/\n+$/,'')
+    ta.dataset.blk = String(i)
+    wrap.classList.add('blk-editing')
+    wrap.innerHTML = ''
+    wrap.appendChild(ta)
+    autoGrow(ta)
+    ta.addEventListener('input', () => autoGrow(ta))
+    ta.addEventListener('blur', () => commitActiveBlock())
+    ta.focus()
+    // 光标移到末尾
+    ta.setSelectionRange(ta.value.length, ta.value.length)
+  }
+
+  function autoGrow(ta) {
+    ta.style.height = 'auto'
+    ta.style.height = ta.scrollHeight + 'px'
+  }
+
+  function openFirstBlock() {
+    const wrap = els.content.querySelector('.blk')
+    if (wrap) beginBlockEdit(wrap)
+  }
+
+  // 把正在编辑的块写回 state.md 并就地重渲染该块
+  function commitActiveBlock() {
+    const ta = els.content.querySelector('textarea.blk-edit')
+    if (!ta) return
+    const i = +ta.dataset.blk
+    const tok = state.blocks[i]
+    if (!tok) return
+    const newRaw = ta.value
+    const oldRaw = tok.raw || ''
+    if (newRaw !== oldRaw.replace(/\n+$/,'')) {
+      // 用新内容替换源码中该块对应片段，保留块后的空行分隔
+      const before = state.blocks.slice(0, i).map((t) => t.raw || '').join('')
+      const after = state.blocks.slice(i + 1).map((t) => t.raw || '').join('')
+      const trail = (oldRaw.match(/\n+$/) || ['\n\n'])[0]
+      state.md = before + newRaw + trail + after
+      saveNotes()
+      renderReader()
+      persistDoc()
+    } else {
+      // 内容未变，仅恢复渲染
+      renderReader()
     }
   }
 
@@ -595,7 +688,8 @@
   }
 
   function buildExport() {
-    let out = state.editing ? els.editor.value : state.md
+    if (state.blkEditing) commitActiveBlock()
+    let out = state.md
     const withNotes = state.notes.filter((n) => n.text)
     if (!withNotes.length) return out
     out = out.replace(/\s*$/, '') + '\n\n---\n\n## 批注\n\n'
@@ -618,7 +712,7 @@
   }
 
   function exportDoc() {
-    if (state.editing) { state.md = els.editor.value }
+    if (state.blkEditing) commitActiveBlock()
     const base = (state.name || 'document').replace(/\.(md|markdown|mdown|mkd|txt)$/i, '')
     download(base + '.md', buildExport())
     showToast('已导出（含批注）到下载')
@@ -645,7 +739,7 @@
   els.scrim.addEventListener('click', closeToc)
 
   els.btnEdit.addEventListener('click', () => {
-    if (els.empty.hidden === false) { loadDoc('', '未命名.md'); setEditing(true); return }
+    if (els.empty.hidden === false) { loadDoc('# 新文档\n\n正文…\n', '未命名.md'); setEditing(true); openFirstBlock(); return }
     setEditing(!state.editing)
   })
   els.btnExport.addEventListener('click', exportDoc)
@@ -682,11 +776,15 @@
 
   const pick = () => els.fileInput.click()
   $('btnOpenBig').addEventListener('click', pick)
-  $('btnNewBig').addEventListener('click', () => { loadDoc('# 新文档\n\n', '未命名.md'); setEditing(true) })
+  $('btnNewBig').addEventListener('click', () => { loadDoc('# 新文档\n\n正文…\n', '未命名.md'); setEditing(true); openFirstBlock() })
   els.fileInput.addEventListener('change', (e) => readFile(e.target.files[0]))
 
   document.addEventListener('selectionchange', onSelection)
   els.content.addEventListener('click', (e) => {
+    if (state.blkEditing) {
+      const wrap = e.target.closest('.blk')
+      if (wrap) { beginBlockEdit(wrap); return }
+    }
     if (!e.target.closest('mark.note-mark')) hideSelPop()
   })
 
