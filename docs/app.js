@@ -39,6 +39,7 @@
     polishCopy: $('polishCopy'),
     polishApply: $('polishApply'),
     aiFab: $('aiFab'),
+    editFab: $('editFab'),
     recentHead: $('recentHead'),
     recentList: $('recentList'),
     emptyRecent: $('emptyRecent'),
@@ -262,6 +263,8 @@
     els.mnHistory.hidden = !state.docId
     els.btnEdit.textContent = '✏️'
     els.aiFab.hidden = false
+    els.editFab.hidden = false
+    els.editFab.classList.remove('on')
 
     if (state.name) {
       els.title.textContent = state.name
@@ -612,11 +615,15 @@
       els.editor.hidden = true
       els.content.hidden = false
       els.btnEdit.textContent = '✓'
+      els.editFab.textContent = '✓'
+      els.editFab.classList.add('on')
       els.content.classList.add('editing')
       renderReader()
     } else {
       commitActiveBlock()
       els.btnEdit.textContent = '✏️'
+      els.editFab.textContent = '✏️'
+      els.editFab.classList.remove('on')
       els.content.classList.remove('editing')
       renderReader()
       persistDoc()
@@ -784,6 +791,7 @@
     if (els.empty.hidden === false) { loadDoc('# 新文档\n\n正文…\n', '未命名.md'); setEditing(true); openFirstBlock(); return }
     setEditing(!state.editing)
   })
+  els.editFab.addEventListener('click', () => setEditing(!state.editing))
   els.btnExport.addEventListener('click', exportDoc)
   els.btnSave.addEventListener('click', saveToCloud)
 
