@@ -84,6 +84,16 @@
     flex-shrink: 0;
   }
   .icon-btn:active { background: var(--border); }
+  .icon-btn.dirty { position: relative; }
+  .icon-btn.dirty::after {
+    content: "";
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #e08a2b;
+    box-shadow: 0 0 0 2px var(--bg);
+  }
 
   /* ---- 内容 ---- */
   .reader {
@@ -439,6 +449,21 @@
   .fld-sep { font-size: 13px; font-weight: 600; color: var(--accent); margin: 4px 0 14px; }
 
   .polish-arrow { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0; }
+  .polish-sheet {
+    display: flex;
+    flex-direction: column;
+    max-height: 86vh;
+    padding-bottom: 0;
+  }
+  .polish-scroll { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+  .polish-foot {
+    position: sticky;
+    bottom: 0;
+    margin-top: 0;
+    padding: 12px 0 calc(6px + env(safe-area-inset-bottom));
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
   #polishOut, #polishOrig, #polishInstr {
     width: 100%; box-sizing: border-box;
     border: 1px solid var(--border); border-radius: 10px;
@@ -506,8 +531,6 @@
     <button class="icon-btn" id="btnToc" title="目录" aria-label="目录">☰</button>
     <span class="brand" id="title">墨记阅读</span>
     <button class="icon-btn" id="btnSave" title="保存到云" aria-label="保存" hidden>💾</button>
-    <button class="icon-btn" id="btnEdit" title="编辑" aria-label="编辑">✏️</button>
-    <button class="icon-btn" id="btnExport" title="导出" aria-label="导出" hidden>⤓</button>
     <button class="icon-btn" id="btnCloud" title="云文档" aria-label="云文档">☁</button>
     <button class="icon-btn" id="btnMore" title="更多" aria-label="更多">⋯</button>
   </div>
@@ -518,6 +541,7 @@
       <button class="menu-item" id="mnSize">A 字号</button>
       <button class="menu-item" id="mnTheme">◐ 深色模式</button>
       <button class="menu-item" id="mnOpen">📂 打开本地文件</button>
+      <button class="menu-item" id="mnExport" hidden>⤓ 导出 Markdown</button>
       <button class="menu-item" id="mnHistory" hidden>🕑 历史版本</button>
       <button class="menu-item" id="mnPolish">✨ AI 润色</button>
       <button class="menu-item" id="mnSettings">⚙ 设置（口令 / AI）</button>
@@ -632,17 +656,19 @@
 
   <!-- AI 润色 -->
   <div class="note-scrim" id="polishScrim" hidden>
-    <div class="note-sheet">
-      <div class="polish-label">原文（可编辑，可留空）</div>
-      <textarea id="polishOrig" placeholder="粘贴 / 输入要润色的文字；也可留空，只写下面的要求让 AI 直接生成…" rows="4"></textarea>
-      <div class="polish-label">润色要求（可留空）</div>
-      <input id="polishInstr" type="text" placeholder="例如：更口语、更简洁、更正式、改成标题…" />
-      <div class="note-actions">
-        <button class="np-btn primary" id="polishRun">✨ 开始润色</button>
+    <div class="note-sheet polish-sheet">
+      <div class="polish-scroll">
+        <div class="polish-label">原文（可编辑，可留空）</div>
+        <textarea id="polishOrig" placeholder="粘贴 / 输入要润色的文字；也可留空，只写下面的要求让 AI 直接生成…" rows="4"></textarea>
+        <div class="polish-label">润色要求（可留空）</div>
+        <input id="polishInstr" type="text" placeholder="例如：更口语、更简洁、更正式、改成标题…" />
+        <div class="note-actions">
+          <button class="np-btn primary" id="polishRun">✨ 开始润色</button>
+        </div>
+        <div class="polish-arrow">↓ AI 润色结果</div>
+        <textarea id="polishOut" placeholder="润色结果会显示在这里…" rows="5"></textarea>
       </div>
-      <div class="polish-arrow">↓ AI 润色结果</div>
-      <textarea id="polishOut" placeholder="润色结果会显示在这里…" rows="5"></textarea>
-      <div class="note-actions">
+      <div class="note-actions polish-foot">
         <button class="np-btn" id="polishCopy" hidden>复制</button>
         <button class="np-btn" id="polishRetry" hidden>重新润色</button>
         <span style="flex:1"></span>

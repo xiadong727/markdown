@@ -16,8 +16,6 @@
     noteQuote: $('noteQuote'),
     noteText: $('noteText'),
     noteDelete: $('noteDelete'),
-    btnEdit: $('btnEdit'),
-    btnExport: $('btnExport'),
     btnSave: $('btnSave'),
     menuScrim: $('menuScrim'),
     cloudScrim: $('cloudScrim'),
@@ -30,6 +28,7 @@
     aiModel: $('aiModel'),
     aiKey: $('aiKey'),
     mnHistory: $('mnHistory'),
+    mnExport: $('mnExport'),
     polishScrim: $('polishScrim'),
     polishOrig: $('polishOrig'),
     polishInstr: $('polishInstr'),
@@ -67,6 +66,7 @@
     realtimeCh: null,
     blocks: [],        // 当前渲染的顶层 token（marked.lexer）
     blkEditing: false, // 就地块编辑模式开关
+    dirty: false,      // 有未保存到云的改动
   }
 
   function applyTheme(t) {
@@ -156,6 +156,8 @@
     }
     state.md += '新段落…\n'
     renderReader()
+    persistDoc()
+    setDirty(true)
     const blks = els.content.querySelectorAll('.blk')
     if (blks.length) beginBlockEdit(blks[blks.length - 1])
   }
@@ -258,12 +260,12 @@
     els.content.hidden = false
     els.content.classList.remove('editing')
     els.editor.hidden = true
-    els.btnExport.hidden = false
+    els.mnExport.hidden = false
     els.btnSave.hidden = false
     els.mnHistory.hidden = !state.docId
-    els.btnEdit.textContent = '✏️'
     els.aiFab.hidden = false
     els.editFab.hidden = false
+    els.editFab.textContent = '✏️'
     els.editFab.classList.remove('on')
 
     if (state.name) {
@@ -273,6 +275,7 @@
     renderReader()
     window.scrollTo(0, 0)
     persistDoc()
+    setDirty(false)
   }
 
   function persistDoc() {
@@ -280,6 +283,11 @@
       localStorage.setItem(STORE.doc, state.md)
       if (state.name) localStorage.setItem(STORE.name, state.name)
     } catch { /* too large */ }
+  }
+
+  function setDirty(on) {
+    state.dirty = on
+    els.btnSave.classList.toggle('dirty', on)
   }
 
   // ===== 云同步 =====
@@ -299,6 +307,7 @@
         els.mnHistory.hidden = false
       }
       persistDoc()
+      setDirty(false)
       showToast('已保存到云 ✓')
       refreshRecent()
     } catch (e) {
@@ -524,7 +533,8 @@
       const out = await MojiCloud.polish(src, instr)
       state.polishedText = out
       els.polishOut.value = out
-      els.polishApply.hidden = false
+      // 原文留空（纯生成）时无法定位替换，只给「复制」
+      els.polishApply.hidden = !src
       els.polishCopy.hidden = false
       els.polishRetry.hidden = false
     } catch (e) {
@@ -545,6 +555,7 @@
       state.md = state.md.slice(0, idx) + out + state.md.slice(idx + q.length)
       renderReader()
       persistDoc()
+      setDirty(true)
       showToast('已替换（记得点保存同步到云）')
       els.polishScrim.hidden = true
     } else {
@@ -614,19 +625,18 @@
     if (on) {
       els.editor.hidden = true
       els.content.hidden = false
-      els.btnEdit.textContent = '✓'
       els.editFab.textContent = '✓'
       els.editFab.classList.add('on')
       els.content.classList.add('editing')
       renderReader()
     } else {
       commitActiveBlock()
-      els.btnEdit.textContent = '✏️'
       els.editFab.textContent = '✏️'
       els.editFab.classList.remove('on')
       els.content.classList.remove('editing')
       renderReader()
       persistDoc()
+      if (state.dirty) showToast('有改动未保存，点 💾 同步到云')
     }
   }
 
@@ -681,6 +691,7 @@
       saveNotes()
       renderReader()
       persistDoc()
+      setDirty(true)
     } else {
       // 内容未变，仅恢复渲染
       renderReader()
@@ -787,12 +798,7 @@
   $('btnToc').addEventListener('click', openToc)
   els.scrim.addEventListener('click', closeToc)
 
-  els.btnEdit.addEventListener('click', () => {
-    if (els.empty.hidden === false) { loadDoc('# 新文档\n\n正文…\n', '未命名.md'); setEditing(true); openFirstBlock(); return }
-    setEditing(!state.editing)
-  })
   els.editFab.addEventListener('click', () => setEditing(!state.editing))
-  els.btnExport.addEventListener('click', exportDoc)
   els.btnSave.addEventListener('click', saveToCloud)
 
   // 顶栏「云」「更多」
@@ -802,6 +808,7 @@
   $('mnSize').addEventListener('click', () => { cycleSize() })
   $('mnTheme').addEventListener('click', () => { toggleTheme() })
   $('mnOpen').addEventListener('click', () => { closeMenu(); pick() })
+  els.mnExport.addEventListener('click', () => { closeMenu(); exportDoc() })
   $('mnHistory').addEventListener('click', openHistory)
   $('mnSettings').addEventListener('click', openSettings)
 
@@ -874,6 +881,10 @@
   document.addEventListener('visibilitychange', resync)
   window.addEventListener('focus', resync)
   window.addEventListener('online', resync)
+
+  window.addEventListener('beforeunload', (e) => {
+    if (state.dirty) { e.preventDefault(); e.returnValue = '' }
+  })
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
