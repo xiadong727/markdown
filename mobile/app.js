@@ -39,7 +39,7 @@
     polishApply: $('polishApply'),
     aiFab: $('aiFab'),
     editFab: $('editFab'),
-    recentHead: $('recentHead'),
+    selNoteBtn: $('selNoteBtn'),
     recentList: $('recentList'),
     emptyRecent: $('emptyRecent'),
     emptyRecentList: $('emptyRecentList'),
@@ -245,8 +245,13 @@
     })
   }
 
-  function openToc() { els.toc.classList.add('show'); els.scrim.classList.add('show') }
+  function openToc() { switchTocTab('toc'); els.toc.classList.add('show'); els.scrim.classList.add('show') }
   function closeToc() { els.toc.classList.remove('show'); els.scrim.classList.remove('show') }
+
+  function switchTocTab(pane) {
+    document.querySelectorAll('.toc-tab').forEach((t) => t.classList.toggle('active', t.dataset.pane === pane))
+    document.querySelectorAll('.toc-pane').forEach((p) => { p.hidden = p.dataset.pane !== pane })
+  }
 
   function loadDoc(md, name, docId) {
     state.md = md
@@ -428,10 +433,8 @@
 
   function renderRecent(docs) {
     const has = docs && docs.length
-    // 抽屉顶部
-    els.recentHead.hidden = !has
-    els.recentList.hidden = !has
-    els.recentList.innerHTML = ''
+    // 抽屉「最近」分段
+    els.recentList.innerHTML = has ? '' : '<div class="toc-empty">暂无最近打开的云文档</div>'
     // 空状态页
     els.emptyRecent.hidden = !has
     els.emptyRecentList.innerHTML = ''
@@ -622,6 +625,7 @@
     // 就地编辑：保持阅读视图，开启后点某块即可编辑该块。
     state.editing = on
     state.blkEditing = on
+    hideSelNote()
     if (on) {
       els.editor.hidden = true
       els.content.hidden = false
@@ -704,6 +708,32 @@
     saveNotes()
     renderReader()
   }
+
+  // 阅读模式选中文字 → 在选区下方浮出「批注」小按钮
+  function onSelection() {
+    if (state.editing) { hideSelNote(); return }
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed) { hideSelNote(); return }
+    const text = sel.toString().trim()
+    if (!text || text.length > 2000) { hideSelNote(); return }
+    const anchor = sel.anchorNode
+    if (!anchor || !els.content.contains(anchor.nodeType === 1 ? anchor : anchor.parentNode)) { hideSelNote(); return }
+    let rect
+    try { rect = sel.getRangeAt(0).getBoundingClientRect() } catch { hideSelNote(); return }
+    if (!rect || (!rect.width && !rect.height)) { hideSelNote(); return }
+    state.pendingSel = { quote: text }
+    const btn = els.selNoteBtn
+    btn.hidden = false
+    const bw = btn.offsetWidth || 72
+    let left = rect.left + rect.width / 2
+    left = Math.max(8 + bw / 2, Math.min(window.innerWidth - 8 - bw / 2, left))
+    // 选区下方 8px；若太靠底则放到选区上方
+    let top = rect.bottom + 8
+    if (top > window.innerHeight - 52) top = rect.top - 8 - (btn.offsetHeight || 32)
+    btn.style.left = left + 'px'
+    btn.style.top = Math.max(8, top) + 'px'
+  }
+  function hideSelNote() { els.selNoteBtn.hidden = true }
 
   function openNoteSheet(noteId) {
     const n = state.notes.find((x) => x.id === noteId)
@@ -797,6 +827,9 @@
 
   $('btnToc').addEventListener('click', openToc)
   els.scrim.addEventListener('click', closeToc)
+  document.querySelectorAll('.toc-tab').forEach((t) => {
+    t.addEventListener('click', () => switchTocTab(t.dataset.pane))
+  })
 
   els.editFab.addEventListener('click', () => setEditing(!state.editing))
   els.btnSave.addEventListener('click', saveToCloud)
@@ -855,6 +888,20 @@
   $('noteCancel').addEventListener('click', closeNoteSheet)
   $('noteSave').addEventListener('click', saveNoteSheet)
   els.noteScrim.addEventListener('click', (e) => { if (e.target === els.noteScrim) closeNoteSheet() })
+
+  // 选中批注小按钮
+  document.addEventListener('selectionchange', onSelection)
+  ;['mousedown', 'touchstart'].forEach((ev) => {
+    els.selNoteBtn.addEventListener(ev, (e) => e.preventDefault(), { passive: false })
+  })
+  els.selNoteBtn.addEventListener('click', (e) => {
+    e.preventDefault()
+    const q = state.pendingSel && state.pendingSel.quote
+    hideSelNote()
+    if (q) openNewNoteSheet(q)
+    window.getSelection().removeAllRanges()
+  })
+  window.addEventListener('scroll', hideSelNote, { passive: true })
 
   ;['dragover', 'drop'].forEach((ev) => {
     document.addEventListener(ev, (e) => { e.preventDefault() })
